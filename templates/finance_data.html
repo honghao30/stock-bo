@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}금융위원회 데이터 확인 - BO System{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .data-section {
+    margin-bottom: 30px;
+  }
+
+  .data-section h3 {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  .btn-fetch {
+    padding: 10px 20px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+    margin-bottom: 10px;
+  }
+
+  .btn-fetch:hover {
+    background: #2980b9;
+  }
+
+  .data-display {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  .data-display pre {
+    margin: 0;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .loading {
+    color: #3498db;
+    font-style: italic;
+  }
+
+  .error {
+    color: #e74c3c;
+    background: #f8d7da;
+    padding: 10px;
+    border-radius: 4px;
+  }
+
+  .success {
+    color: #155724;
+    background: #d4edda;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+
+  .info-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #e8f4fd;
+    color: #2980b9;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-left: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 style="color: #2c3e50; margin-top: 0">📊 금융위원회 데이터 확인</h2>
+  <p style="color: #666">
+    금융위원회 공개데이터포털에서 제공하는 3가지 API 데이터를 확인할 수 있습니다.
+  </p>
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0" />
+
+  <!-- 공시정보 -->
+  <div class="data-section">
+    <h3>
+      📋 공시정보 (GetDiscInfoService_V2)
+      <span class="info-badge" id="disclosure-status">대기중</span>
+    </h3>
+    <button class="btn-fetch" onclick="fetchDisclosureInfo()">
+      공시정보 가져오기
+    </button>
+    <div id="disclosure-data" class="data-display" style="display: none;"></div>
+  </div>
+
+  <!-- 주식발행 공시정보 -->
+  <div class="data-section">
+    <h3>
+      📈 주식발행 공시정보
+      <span class="info-badge" id="issuance-status">대기중</span>
+    </h3>
+    <button class="btn-fetch" onclick="fetchStockIssuance()">
+      주식발행 정보 가져오기
+    </button>
+    <div id="issuance-data" class="data-display" style="display: none;"></div>
+  </div>
+
+  <!-- 주식시세정보 -->
+  <div class="data-section">
+    <h3>
+      💹 주식시세정보
+      <span class="info-badge" id="price-status">대기중</span>
+    </h3>
+    <button class="btn-fetch" onclick="fetchStockPrice()">
+      주식시세 정보 가져오기
+    </button>
+    <div id="price-data" class="data-display" style="display: none;"></div>
+  </div>
+
+  <!-- 전체 데이터 가져오기 -->
+  <div class="data-section">
+    <h3>🔄 전체 데이터 일괄 수집</h3>
+    <button class="btn-fetch" onclick="fetchAllData()" style="background: #27ae60;">
+      모든 데이터 가져오기
+    </button>
+    <div id="all-data" class="data-display" style="display: none;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function fetchDisclosureInfo() {
+    const statusEl = document.getElementById('disclosure-status');
+    const dataEl = document.getElementById('disclosure-data');
+    
+    statusEl.textContent = '로딩중...';
+    statusEl.style.background = '#fff3cd';
+    statusEl.style.color = '#856404';
+    dataEl.style.display = 'block';
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/disclosure-info?page_no=1&num_of_rows=10');
+      const data = await response.json();
+      
+      statusEl.textContent = '완료';
+      statusEl.style.background = '#d4edda';
+      statusEl.style.color = '#155724';
+      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    } catch (error) {
+      statusEl.textContent = '오류';
+      statusEl.style.background = '#f8d7da';
+      statusEl.style.color = '#721c24';
+      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+    }
+  }
+
+  async function fetchStockIssuance() {
+    const statusEl = document.getElementById('issuance-status');
+    const dataEl = document.getElementById('issuance-data');
+    
+    statusEl.textContent = '로딩중...';
+    statusEl.style.background = '#fff3cd';
+    statusEl.style.color = '#856404';
+    dataEl.style.display = 'block';
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/stock-issuance?page_no=1&num_of_rows=10');
+      const data = await response.json();
+      
+      statusEl.textContent = '완료';
+      statusEl.style.background = '#d4edda';
+      statusEl.style.color = '#155724';
+      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    } catch (error) {
+      statusEl.textContent = '오류';
+      statusEl.style.background = '#f8d7da';
+      statusEl.style.color = '#721c24';
+      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+    }
+  }
+
+  async function fetchStockPrice() {
+    const statusEl = document.getElementById('price-status');
+    const dataEl = document.getElementById('price-data');
+    
+    statusEl.textContent = '로딩중...';
+    statusEl.style.background = '#fff3cd';
+    statusEl.style.color = '#856404';
+    dataEl.style.display = 'block';
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/stock-price?page_no=1&num_of_rows=10');
+      const data = await response.json();
+      
+      statusEl.textContent = '완료';
+      statusEl.style.background = '#d4edda';
+      statusEl.style.color = '#155724';
+      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    } catch (error) {
+      statusEl.textContent = '오류';
+      statusEl.style.background = '#f8d7da';
+      statusEl.style.color = '#721c24';
+      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+    }
+  }
+
+  async function fetchAllData() {
+    const dataEl = document.getElementById('all-data');
+    dataEl.style.display = 'block';
+    dataEl.innerHTML = '<div class="loading">모든 데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/fetch-data');
+      const result = await response.json();
+      
+      if (result.success) {
+        dataEl.innerHTML = '<div class="success">✅ 모든 데이터 수집 완료!</div><pre>' + 
+          JSON.stringify(result.data, null, 2) + '</pre>';
+      } else {
+        dataEl.innerHTML = '<div class="error">오류: ' + (result.error || '알 수 없는 오류') + '</div>';
+      }
+    } catch (error) {
+      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+    }
+  }
+</script>
+{% endblock %}
+

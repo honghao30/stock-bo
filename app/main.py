@@ -1,9 +1,13 @@
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import List
+
+# 서비스 모듈 import
+from app.services.api_service import finance_api_service
+from app.services.schedule_api_service import schedule_api_service
 
 # .env 파일 로드
 load_dotenv()
@@ -150,15 +154,94 @@ async def update_schedule(
 @app.post("/admin/schedule/sync-api")
 async def sync_api_schedule(user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/", status_code=303)
-    # 가상의 외부 API 데이터 시뮬레이션
-    api_items = [
-        {"date": "2024-04-01", "title": "[API] 주식 시장 개장 알림"},
-        {"date": "2024-04-15", "title": "[API] 기업 공시 데이터 동기화"}
-    ]
+    # 외부 API에서 일정 데이터 가져오기
+    api_items = await schedule_api_service.fetch_schedules_from_api()
     for item in api_items:
         new_id = max([s['id'] for s in schedules], default=0) + 1
         schedules.append({"id": new_id, "date": item['date'], "title": item['title'], "type": "api"})
     return RedirectResponse(url="/admin/schedule", status_code=303)
+
+# --- 금융위원회 API 데이터 수집 엔드포인트 ---
+@app.get("/api/fetch-data")
+async def fetch_data(user=Depends(get_current_user)):
+    """
+    금융위원회 API에서 모든 데이터를 수집합니다.
+    """
+    if not user:
+        return JSONResponse(
+            {"error": "인증이 필요합니다."},
+            status_code=401
+        )
+    
+    try:
+        # 모든 금융위원회 데이터 가져오기
+        data = await finance_api_service.fetch_all_finance_data()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "데이터 수집이 완료되었습니다.",
+            "data": data
+        })
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"데이터 수집 중 오류가 발생했습니다: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/disclosure-info")
+async def get_disclosure_info(
+    request: Request,
+    page_no: int = 1,
+    num_of_rows: int = 10,
+    user=Depends(get_current_user)
+):
+    """공시정보 조회"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    data = await finance_api_service.fetch_disclosure_info(page_no, num_of_rows)
+    return JSONResponse(data)
+
+@app.get("/api/stock-issuance")
+async def get_stock_issuance(
+    request: Request,
+    page_no: int = 1,
+    num_of_rows: int = 10,
+    user=Depends(get_current_user)
+):
+    """주식발행 공시정보 조회"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    data = await finance_api_service.fetch_stock_issuance_info(page_no, num_of_rows)
+    return JSONResponse(data)
+
+@app.get("/api/stock-price")
+async def get_stock_price(
+    request: Request,
+    page_no: int = 1,
+    num_of_rows: int = 10,
+    user=Depends(get_current_user)
+):
+    """주식시세정보 조회"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    data = await finance_api_service.fetch_stock_price_info(page_no, num_of_rows)
+    return JSONResponse(data)
+
+# --- 금융위원회 데이터 확인 페이지 ---
+@app.get("/admin/finance-data", response_class=HTMLResponse)
+async def finance_data_page(request: Request, user=Depends(get_current_user)):
+    """금융위원회 데이터 확인 페이지"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    return templates.TemplateResponse("finance_data.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "active_page": "dashboard"
+    })
 
 # 7. [GET] /logout : 로그아웃
 @app.get("/logout")

@@ -1,58 +1,64 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request, Depends
+from fastapi import FastAPI, Form, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from typing import List
 
 # .env 파일 로드
 load_dotenv()
 
 app = FastAPI()
 
-# os.environ.get을 통해 환경 변수에서 값을 가져옵니다.
-# 값이 없을 경우를 대비해 기본값을 설정할 수도 있습니다.
+# templates 폴더 위치 확인
+templates = Jinja2Templates(directory="templates")
+
+# 환경 변수 로드
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
 ADMIN_PW = os.environ.get("ADMIN_PW")
-AUTH_COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME")
+AUTH_COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME", "bo_session_id")
 SECRET_TOKEN = os.environ.get("SECRET_TOKEN")
+
+# --- 임시 데이터 저장소 (DB 연결 전) ---
+admin_users = [{"email": ADMIN_EMAIL, "name": "최고관리자"}]
+# 일정 데이터 샘플
+schedules = [
+    {"id": 1, "date": "2024-03-25", "title": "시스템 정기 점검", "type": "manual"},
+    {"id": 2, "date": "2024-03-26", "title": "API 데이터 자동 수집", "type": "api"}
+]
 
 # 2. 인증 확인 함수
 async def get_current_user(request: Request):
     session_id = request.cookies.get(AUTH_COOKIE_NAME)
-    if session_id != SECRET_TOKEN:
+    if not session_id or session_id != SECRET_TOKEN:
         return None
     return session_id
 
-# 3. [GET] / : 초기 접속 화면 (인증 필요 안내)
+# 3. [GET] / : 초기 접속 화면
 @app.get("/", response_class=HTMLResponse)
 async def read_root(user=Depends(get_current_user)):
-    # 이미 로그인된 사용자가 루트로 오면 대시보드로 바로 보냄
-    if user:
-        return RedirectResponse(url="/admin/dashboard")
-        
+    if user: return RedirectResponse(url="/admin/dashboard")
     return """
     <div style="text-align:center; padding:100px; font-family:sans-serif;">
         <h1 style="color:#e74c3c;">🛑 관리자 인증 필요</h1>
         <p style="font-size:18px; color:#555;">허가되지 않은 접근입니다. 로그인 후 이용해주세요.</p>
         <br>
-        <a href="/login" style="padding:15px 30px; background:#3498db; color:white; text-decoration:none; border-radius:8px; font-weight:bold; transition: 0.3s;">
-            로그인 페이지로 이동
-        </a>
+        <a href="/login" style="padding:15px 30px; background:#3498db; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">로그인 페이지로 이동</a>
     </div>
     """
 
-# 4. [GET] /login : 로그인 화면 출력
+# 4. [GET] /login : 로그인 화면
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if request.cookies.get(AUTH_COOKIE_NAME) == SECRET_TOKEN:
         return RedirectResponse(url="/admin/dashboard")
-        
     return """
     <div style="width: 350px; margin: 100px auto; padding: 30px; border: 1px solid #ddd; border-radius: 12px; font-family: sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <h2 style="text-align: center; color: #333;">관리자 로그인 (BO)</h2>
         <form action="/login" method="post" style="display: flex; flex-direction: column; gap: 15px;">
             <input type="email" name="username" placeholder="이메일" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px;">
             <input type="password" name="password" placeholder="비밀번호" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px;">
-            <button type="submit" style="padding: 12px; background: #2c3e50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">로그인</button>
+            <button type="submit" style="padding: 12px; background: #2c3e50; color: white; border: none; border-radius: 6px; cursor: pointer;">로그인</button>
         </form>
     </div>
     """
@@ -66,23 +72,92 @@ async def do_login(username: str = Form(...), password: str = Form(...)):
         return response
     return HTMLResponse("<script>alert('정보가 일치하지 않습니다.'); window.location.href='/login';</script>")
 
-# 6. [GET] /admin/dashboard : 관리자 전용 페이지
+# 6. [GET] /admin/dashboard : 관리자 대시보드
 @app.get("/admin/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(user=Depends(get_current_user)):
-    if not user:
-        return RedirectResponse(url="/") # 인증 없으면 루트 경고창으로 보냄
-        
-    return f"""
-    <div style="padding: 50px; font-family: sans-serif;">
-        <h1 style="color: #2c3e50;">🚀 BO 관리자 시스템</h1>
-        <p>환영합니다, <b>{ADMIN_EMAIL}</b> 관리자님.</p>
-        <hr>
-        <div style="margin-top: 30px;">
-            <button onclick="location.href='/api/fetch-data'" style="padding: 10px 20px;">외부 API 데이터 수집</button>
-            <button onclick="location.href='/logout'" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 4px; margin-left: 10px;">로그아웃</button>
-        </div>
-    </div>
-    """
+async def admin_dashboard(request: Request, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/")
+    return templates.TemplateResponse("dashboard.html", {"request": request, "admin_email": ADMIN_EMAIL})
+
+# --- 관리자 관리 로직 ---
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(request: Request, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/")
+    return templates.TemplateResponse("admin_users.html", {"request": request, "admin_email": ADMIN_EMAIL, "users": admin_users})
+
+@app.post("/admin/users/add")
+async def add_admin(name: str = Form(...), email: str = Form(...), password: str = Form(...), user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    if any(u['email'] == email for u in admin_users):
+        return HTMLResponse("<script>alert('이미 존재하는 이메일입니다.'); history.back();</script>")
+    admin_users.append({"email": email, "name": name})
+    return RedirectResponse(url="/admin/users", status_code=303)
+
+@app.get("/admin/users/delete/{email}")
+async def delete_admin(email: str, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    if email == ADMIN_EMAIL:
+        return HTMLResponse("<script>alert('본인 계정은 삭제할 수 없습니다.'); location.href='/admin/users';</script>")
+    global admin_users
+    admin_users = [u for u in admin_users if u['email'] != email]
+    return RedirectResponse(url="/admin/users", status_code=303)
+
+# --- 📅 일정 관리 로직 (신규 추가) ---
+
+@app.get("/admin/schedule", response_class=HTMLResponse)
+async def schedule_page(request: Request, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/")
+    # 날짜순 정렬하여 전달
+    sorted_schedules = sorted(schedules, key=lambda x: x['date'])
+    return templates.TemplateResponse("schedule.html", {
+        "request": request, 
+        "admin_email": ADMIN_EMAIL, 
+        "schedules": sorted_schedules
+    })
+
+@app.post("/admin/schedule/add")
+async def add_schedule(date: str = Form(...), title: str = Form(...), user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    new_id = max([s['id'] for s in schedules], default=0) + 1
+    schedules.append({"id": new_id, "date": date, "title": title, "type": "manual"})
+    return RedirectResponse(url="/admin/schedule", status_code=303)
+
+@app.get("/admin/schedule/delete/{sch_id}")
+async def delete_schedule(sch_id: int, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    global schedules
+    schedules = [s for s in schedules if s['id'] != sch_id]
+    return RedirectResponse(url="/admin/schedule", status_code=303)
+# [POST] 일정 수정 처리
+@app.post("/admin/schedule/update")
+async def update_schedule(
+    sch_id: int = Form(...),
+    date: str = Form(...),
+    title: str = Form(...),
+    user=Depends(get_current_user)
+):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    
+    global schedules
+    for s in schedules:
+        if s['id'] == sch_id:
+            s['date'] = date
+            s['title'] = title
+            break
+            
+    return RedirectResponse(url="/admin/schedule", status_code=303)
+
+@app.post("/admin/schedule/sync-api")
+async def sync_api_schedule(user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    # 가상의 외부 API 데이터 시뮬레이션
+    api_items = [
+        {"date": "2024-04-01", "title": "[API] 주식 시장 개장 알림"},
+        {"date": "2024-04-15", "title": "[API] 기업 공시 데이터 동기화"}
+    ]
+    for item in api_items:
+        new_id = max([s['id'] for s in schedules], default=0) + 1
+        schedules.append({"id": new_id, "date": item['date'], "title": item['title'], "type": "api"})
+    return RedirectResponse(url="/admin/schedule", status_code=303)
 
 # 7. [GET] /logout : 로그아웃
 @app.get("/logout")
@@ -90,3 +165,111 @@ async def logout():
     response = RedirectResponse(url="/")
     response.delete_cookie(AUTH_COOKIE_NAME)
     return response
+
+# --- 가상 회원 데이터 (구글 로그인 회원 가정) ---
+members = [
+    {"id": 1, "name": "김철수", "email": "chulsoo@gmail.com", "join_date": "2024-03-20", "status": "active", "posts": 5, "comments": 12},
+    {"id": 2, "name": "이영희", "email": "younghee@gmail.com", "join_date": "2024-03-22", "status": "active", "posts": 2, "comments": 45}
+]
+
+# [GET] 회원 관리 페이지
+@app.get("/admin/members", response_class=HTMLResponse)
+async def admin_members_page(request: Request, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/")
+    return templates.TemplateResponse("members.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "members": members
+    })
+
+# [GET] 회원 상태 토글 (정지/활성화)
+@app.get("/admin/members/status/{member_id}")
+async def toggle_member_status(member_id: int, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    for m in members:
+        if m['id'] == member_id:
+            m['status'] = "blocked" if m['status'] == "active" else "active"
+            break
+    return RedirectResponse(url="/admin/members", status_code=303)    
+
+
+# --- 게시판 설정 데이터 (DB 연결 전) ---
+boards = [
+    {
+        "id": "B001", 
+        "name": "자유게시판", 
+        "type": "korean",  # 일반 한국형
+        "auth": "member",  # 회원 전용
+        "created_at": "2024-03-24"
+    },
+    {
+        "id": "B002", 
+        "name": "문의사항(방명록)", 
+        "type": "guestbook", # 방명록(댓글/대댓글 최적화)
+        "auth": "all",      # 비회원 가능
+        "created_at": "2024-03-24"
+    }
+]
+
+# [GET] 게시판 관리 메인 (목록 및 생성 폼)
+@app.get("/admin/board", response_class=HTMLResponse)
+async def admin_board_page(request: Request, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/")
+    return templates.TemplateResponse("board_admin.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "boards": boards
+    })
+
+# [POST] 새 게시판 생성
+@app.post("/admin/board/create")
+async def create_board(
+    name: str = Form(...),
+    type: str = Form(...),
+    auth: str = Form(...),
+    user=Depends(get_current_user)
+):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    
+    # 고유 ID 생성 (B + 숫자)
+    new_id = f"B{len(boards) + 1:03d}"
+    from datetime import date
+    
+    boards.append({
+        "id": new_id,
+        "name": name,
+        "type": type,
+        "auth": auth,
+        "created_at": str(date.today())
+    })
+    return RedirectResponse(url="/admin/board", status_code=303)    
+
+# [POST] 게시판 설정 수정 처리
+@app.post("/admin/board/update")
+async def update_board(
+    board_id: str = Form(...),
+    name: str = Form(...),
+    type: str = Form(...),
+    auth: str = Form(...),
+    user=Depends(get_current_user)
+):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    
+    global boards
+    for b in boards:
+        if b['id'] == board_id:
+            b['name'] = name
+            b['type'] = type
+            b['auth'] = auth
+            break
+            
+    return RedirectResponse(url="/admin/board", status_code=303)
+
+# [GET] 게시판 삭제 처리
+@app.get("/admin/board/delete/{board_id}")
+async def delete_board(board_id: str, user=Depends(get_current_user)):
+    if not user: return RedirectResponse(url="/", status_code=303)
+    
+    global boards
+    boards = [b for b in boards if b['id'] != board_id]
+    return RedirectResponse(url="/admin/board", status_code=303)    

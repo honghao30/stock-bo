@@ -1,311 +1,258 @@
-<!DOCTYPE html>
-<html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>게시판 관리 - BO System</title>
-    <style>
-      body {
-        display: flex;
-        margin: 0;
-        font-family: sans-serif;
-        background: #f4f7f6;
-        height: 100vh;
-      }
-      .sidebar {
-        width: 250px;
-        background: #2c3e50;
-        color: white;
-        padding: 20px 0;
-      }
-      .menu-item {
-        padding: 15px 25px;
-        color: #bdc3c7;
-        text-decoration: none;
-        display: block;
-      }
-      .menu-item:hover,
-      .menu-item.active {
-        background: #34495e;
-        color: white;
-      }
-      .main-content {
-        flex: 1;
-        padding: 40px;
-        overflow-y: auto;
-      }
-      .card {
-        background: white;
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        margin-bottom: 20px;
-      }
+{% extends "base.html" %}
 
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-      }
-      th,
-      td {
-        padding: 15px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-      }
+{% block title %}게시판 관리 - BO System{% endblock %}
 
-      .form-group {
-        margin-bottom: 15px;
-        display: flex;
-        gap: 10px;
-        align-items: center;
-      }
-      input,
-      select {
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
-      .btn-create {
-        padding: 10px 25px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-      }
+{% block extra_styles %}
+<style>
+  .form-group {
+    margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
 
-      .badge {
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: bold;
-      }
-      .type-korean {
-        background: #e8f4fd;
-        color: #2980b9;
-      }
-      .type-guest {
-        background: #fef9e7;
-        color: #f1c40f;
-      }
+  input,
+  select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
 
-      /* --- 추가된 설정 모달 스타일 --- */
-      #editModal {
-        display: none; /* 기본은 숨김 */
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-      }
-      .modal-card {
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        width: 450px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-      }
-      .modal-card h3 {
-        margin-top: 0;
-        color: #2c3e50;
-      }
-      .modal-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 25px;
-      }
-      .btn-cancel {
-        padding: 10px 20px;
-        border: none;
-        cursor: pointer;
-        border-radius: 4px;
-      }
-      .btn-save {
-        padding: 10px 20px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="sidebar">
-      <h2>🚀 BO System</h2>
-      <a href="/admin/board" class="menu-item active">📋 게시판 관리</a>
-      <a href="/admin/dashboard" class="menu-item">📊 데이터 관리</a>
-      <a href="/admin/users" class="menu-item">👥 관리자 관리</a>
-      <a href="/admin/members" class="menu-item">👥 회원 관리</a>
-      <a href="/admin/schedule" class="menu-item">📅 일정 관리</a>
+  .btn-create {
+    padding: 10px 25px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .type-korean {
+    background: #e8f4fd;
+    color: #2980b9;
+  }
+
+  .type-guest {
+    background: #fef9e7;
+    color: #f1c40f;
+  }
+
+  /* 모달 스타일 */
+  #editModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-card {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    width: 450px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  }
+
+  .modal-card h3 {
+    margin-top: 0;
+    color: #2c3e50;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 25px;
+  }
+
+  .btn-cancel {
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+  .btn-save {
+    padding: 10px 20px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 style="margin-top: 0">🛠️ 새 게시판 생성</h2>
+  <form action="/admin/board/create" method="post">
+    <div class="form-group">
+      <input
+        type="text"
+        name="name"
+        placeholder="게시판 이름 (예: 자유게시판)"
+        required
+        style="flex: 2"
+      />
+      <select name="type" required style="flex: 1">
+        <option value="korean">일반 한국형 (목록형)</option>
+        <option value="guestbook">방명록 (댓글/대댓글 중심)</option>
+      </select>
+      <select name="auth" required style="flex: 1">
+        <option value="all">누구나 (비회원 포함)</option>
+        <option value="member">회원 이상</option>
+        <option value="admin">관리자 전용</option>
+      </select>
+      <button type="submit" class="btn-create">게시판 생성</button>
     </div>
+  </form>
+</div>
 
-    <div class="main-content">
-      <div class="card">
-        <h2 style="margin-top: 0">🛠️ 새 게시판 생성</h2>
-        <form action="/admin/board/create" method="post">
-          <div class="form-group">
-            <input
-              type="text"
-              name="name"
-              placeholder="게시판 이름 (예: 자유게시판)"
-              required
-              style="flex: 2"
-            />
-            <select name="type" required style="flex: 1">
-              <option value="korean">일반 한국형 (목록형)</option>
-              <option value="guestbook">방명록 (댓글/대댓글 중심)</option>
-            </select>
-            <select name="auth" required style="flex: 1">
-              <option value="all">누구나 (비회원 포함)</option>
-              <option value="member">회원 이상</option>
-              <option value="admin">관리자 전용</option>
-            </select>
-            <button type="submit" class="btn-create">게시판 생성</button>
-          </div>
-        </form>
+<div class="card">
+  <h3>📋 운영 중인 게시판 목록</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>게시판 명</th>
+        <th>유형</th>
+        <th>작성 권한</th>
+        <th>생성일</th>
+        <th>관리</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in boards %}
+      <tr>
+        <td><code>{{ b.id }}</code></td>
+        <td style="font-weight: bold">{{ b.name }}</td>
+        <td>
+          <span
+            class="badge {{ 'type-korean' if b.type == 'korean' else 'type-guest' }}"
+          >
+            {{ '일반형' if b.type == 'korean' else '방명록' }}
+          </span>
+        </td>
+        <td>
+          {% if b.auth == 'all' %}누구나 {% elif b.auth == 'member' %}회원
+          {% else %}관리자{% endif %}
+        </td>
+        <td>{{ b.created_at }}</td>
+        <td>
+          <button
+            onclick="openEditModal('{{ b.id }}', '{{ b.name }}', '{{ b.type }}', '{{ b.auth }}')"
+            style="
+              color: #3498db;
+              background: none;
+              border: none;
+              cursor: pointer;
+              text-decoration: none;
+              margin-right: 10px;
+              font-size: 14px;
+            "
+          >
+            설정
+          </button>
+
+          <a
+            href="/admin/board/delete/{{ b.id }}"
+            style="color: #e74c3c; text-decoration: none; font-size: 14px"
+            onclick="return confirm('이 게시판을 삭제하시겠습니까? 관련 데이터가 모두 사라집니다.')"
+            >삭제</a
+          >
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="editModal">
+  <div class="modal-card">
+    <h3>🛠️ 게시판 설정 변경</h3>
+    <form action="/admin/board/update" method="post">
+      <input type="hidden" name="board_id" id="edit_board_id" />
+
+      <div style="margin-bottom: 15px">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold"
+          >게시판 이름</label
+        >
+        <input
+          type="text"
+          name="name"
+          id="edit_name"
+          required
+          style="width: 100%; box-sizing: border-box"
+        />
       </div>
 
-      <div class="card">
-        <h3>📋 운영 중인 게시판 목록</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>게시판 명</th>
-              <th>유형</th>
-              <th>작성 권한</th>
-              <th>생성일</th>
-              <th>관리</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for b in boards %}
-            <tr>
-              <td><code>{{ b.id }}</code></td>
-              <td style="font-weight: bold">{{ b.name }}</td>
-              <td>
-                <span
-                  class="badge {{ 'type-korean' if b.type == 'korean' else 'type-guest' }}"
-                >
-                  {{ '일반형' if b.type == 'korean' else '방명록' }}
-                </span>
-              </td>
-              <td>
-                {% if b.auth == 'all' %}누구나 {% elif b.auth == 'member' %}회원
-                {% else %}관리자{% endif %}
-              </td>
-              <td>{{ b.created_at }}</td>
-              <td>
-                <button
-                  onclick="openEditModal('{{ b.id }}', '{{ b.name }}', '{{ b.type }}', '{{ b.auth }}')"
-                  style="
-                    color: #3498db;
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    text-decoration: none;
-                    margin-right: 10px;
-                    font-size: 14px;
-                  "
-                >
-                  설정
-                </button>
-
-                <a
-                  href="/admin/board/delete/{{ b.id }}"
-                  style="color: #e74c3c; text-decoration: none; font-size: 14px"
-                  onclick="return confirm('이 게시판을 삭제하시겠습니까? 관련 데이터가 모두 사라집니다.')"
-                  >삭제</a
-                >
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div style="margin-bottom: 15px">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold"
+          >유형</label
+        >
+        <select name="type" id="edit_type" style="width: 100%">
+          <option value="korean">일반 한국형 (목록형)</option>
+          <option value="guestbook">방명록 (댓글/대댓글 중심)</option>
+        </select>
       </div>
-    </div>
 
-    <div id="editModal">
-      <div class="modal-card">
-        <h3>🛠️ 게시판 설정 변경</h3>
-        <form action="/admin/board/update" method="post">
-          <input type="hidden" name="board_id" id="edit_board_id" />
-
-          <div style="margin-bottom: 15px">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold"
-              >게시판 이름</label
-            >
-            <input
-              type="text"
-              name="name"
-              id="edit_name"
-              required
-              style="width: 100%; box-sizing: border-box"
-            />
-          </div>
-
-          <div style="margin-bottom: 15px">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold"
-              >유형</label
-            >
-            <select name="type" id="edit_type" style="width: 100%">
-              <option value="korean">일반 한국형 (목록형)</option>
-              <option value="guestbook">방명록 (댓글/대댓글 중심)</option>
-            </select>
-          </div>
-
-          <div style="margin-bottom: 15px">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold"
-              >권한</label
-            >
-            <select name="auth" id="edit_auth" style="width: 100%">
-              <option value="all">누구나 (비회원 포함)</option>
-              <option value="member">회원 이상</option>
-              <option value="admin">관리자 전용</option>
-            </select>
-          </div>
-
-          <div class="modal-footer">
-            <button type="button" class="btn-cancel" onclick="closeEditModal()">
-              취소
-            </button>
-            <button type="submit" class="btn-save">변경 사항 저장</button>
-          </div>
-        </form>
+      <div style="margin-bottom: 15px">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold"
+          >권한</label
+        >
+        <select name="auth" id="edit_auth" style="width: 100%">
+          <option value="all">누구나 (비회원 포함)</option>
+          <option value="member">회원 이상</option>
+          <option value="admin">관리자 전용</option>
+        </select>
       </div>
-    </div>
 
-    <script>
-      function openEditModal(id, name, type, auth) {
-        // 기존 데이터를 입력 필드에 채움
-        document.getElementById("edit_board_id").value = id;
-        document.getElementById("edit_name").value = name;
-        document.getElementById("edit_type").value = type;
-        document.getElementById("edit_auth").value = auth;
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" onclick="closeEditModal()">
+          취소
+        </button>
+        <button type="submit" class="btn-save">변경 사항 저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
 
-        // 모달 표시
-        document.getElementById("editModal").style.display = "flex";
-      }
+{% block extra_scripts %}
+<script>
+  function openEditModal(id, name, type, auth) {
+    document.getElementById("edit_board_id").value = id;
+    document.getElementById("edit_name").value = name;
+    document.getElementById("edit_type").value = type;
+    document.getElementById("edit_auth").value = auth;
+    document.getElementById("editModal").style.display = "flex";
+  }
 
-      function closeEditModal() {
-        document.getElementById("editModal").style.display = "none";
-      }
+  function closeEditModal() {
+    document.getElementById("editModal").style.display = "none";
+  }
 
-      // 배경 클릭 시 닫기
-      window.onclick = function (event) {
-        const modal = document.getElementById("editModal");
-        if (event.target == modal) {
-          closeEditModal();
-        }
-      };
-    </script>
-  </body>
-</html>
+  window.onclick = function (event) {
+    const modal = document.getElementById("editModal");
+    if (event.target == modal) {
+      closeEditModal();
+    }
+  };
+</script>
+{% endblock %}

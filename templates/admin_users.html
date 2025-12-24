@@ -1,223 +1,166 @@
-<!DOCTYPE html>
-<html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>관리자 관리 - BO System</title>
-    <style>
-      /* 기존 스타일 유지 */
-      body {
-        display: flex;
-        margin: 0;
-        font-family: sans-serif;
-        background: #f4f7f6;
-        height: 100vh;
-      }
-      .sidebar {
-        width: 250px;
-        background: #2c3e50;
-        color: white;
-        padding: 20px 0;
-      }
-      .menu-item {
-        padding: 15px 25px;
-        color: #bdc3c7;
-        text-decoration: none;
-        display: block;
-      }
-      .menu-item:hover,
-      .menu-item.active {
-        background: #34495e;
-        color: white;
-      }
-      .main-content {
-        flex: 1;
-        padding: 40px;
-        overflow-y: auto;
-      }
-      .card {
-        background: white;
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        margin-bottom: 20px;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-      }
-      th,
-      td {
-        padding: 12px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-      }
-      th {
-        background: #f8f9fa;
-      }
-      .add-form input,
-      .pwd-form input {
-        padding: 8px;
-        margin-right: 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
-      .btn-add,
-      .btn-pwd {
-        padding: 8px 20px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      .btn-del {
-        color: #e74c3c;
-        text-decoration: none;
-        font-size: 14px;
-      }
-      .pwd-section {
-        display: none;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 2px dashed #eee;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="sidebar">
-      <h2>🚀 BO System</h2>
-      <a href="/admin/board" class="menu-item">📋 게시판 관리</a>
-      <a href="/admin/dashboard" class="menu-item">📊 데이터 관리</a>
-      <a href="/admin/users" class="menu-item active">👥 관리자 관리</a>
-      <a href="/admin/members" class="menu-item">👥 회원 관리</a>
-      <a href="/admin/schedule" class="menu-item">📅 일정 관리</a>
-    </div>
+{% extends "base.html" %}
 
-    <div class="main-content">
-      <div class="card">
-        <h3>👥 신규 관리자 추가</h3>
-        <form action="/admin/users/add" method="post" class="add-form">
-          <input type="text" name="name" placeholder="이름" required />
-          <input
-            type="email"
-            name="email"
-            placeholder="이메일 아이디"
-            required
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="비밀번호"
-            required
-          />
-          <button type="submit" class="btn-add">추가하기</button>
-        </form>
-      </div>
+{% block title %}관리자 관리 - BO System{% endblock %}
 
-      <div class="card">
-        <h3>📋 관리자 목록</h3>
-        <form id="userForm" action="/admin/users/change-password" method="post">
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    id="selectAll"
-                    onclick="toggleSelectAll(this)"
-                  />
-                </th>
-                <th>이름</th>
-                <th>이메일</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for u in users %}
-              <tr>
-                <td>
-                  <input
-                    type="checkbox"
-                    name="selected_emails"
-                    value="{{ u.email }}"
-                    onclick="updateVisibility()"
-                  />
-                </td>
-                <td>{{ u.name }}</td>
-                <td>{{ u.email }}</td>
-                <td>
-                  {% if u.email != admin_email %}
-                  <a
-                    href="/admin/users/delete/{{ u.email }}"
-                    class="btn-del"
-                    onclick="return confirm('삭제하시겠습니까?')"
-                    >삭제</a
-                  >
-                  {% else %}
-                  <span style="color: #aaa">삭제불가(본인)</span>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+{% block extra_styles %}
+<style>
+  .add-form input,
+  .pwd-form input {
+    padding: 8px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
 
-          <div id="pwdSection" class="pwd-section">
-            <h4>🔒 선택한 관리자 비밀번호 변경</h4>
-            <div class="pwd-form">
-              <input
-                type="password"
-                name="new_password"
-                placeholder="새 비밀번호 입력"
-                id="newPwdInput"
-              />
-              <button
-                type="submit"
-                class="btn-pwd"
-                onclick="return validatePwd()"
-              >
-                변경 적용
-              </button>
-            </div>
-          </div>
-        </form>
+  .btn-add,
+  .btn-pwd {
+    padding: 8px 20px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-del {
+    color: #e74c3c;
+    text-decoration: none;
+    font-size: 14px;
+  }
+
+  .pwd-section {
+    display: none;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed #eee;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h3>👥 신규 관리자 추가</h3>
+  <form action="/admin/users/add" method="post" class="add-form">
+    <input type="text" name="name" placeholder="이름" required />
+    <input
+      type="email"
+      name="email"
+      placeholder="이메일 아이디"
+      required
+    />
+    <input
+      type="password"
+      name="password"
+      placeholder="비밀번호"
+      required
+    />
+    <button type="submit" class="btn-add">추가하기</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>📋 관리자 목록</h3>
+  <form id="userForm" action="/admin/users/change-password" method="post">
+    <table>
+      <thead>
+        <tr>
+          <th>
+            <input
+              type="checkbox"
+              id="selectAll"
+              onclick="toggleSelectAll(this)"
+            />
+          </th>
+          <th>이름</th>
+          <th>이메일</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              name="selected_emails"
+              value="{{ u.email }}"
+              onclick="updateVisibility()"
+            />
+          </td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            {% if u.email != admin_email %}
+            <a
+              href="/admin/users/delete/{{ u.email }}"
+              class="btn-del"
+              onclick="return confirm('삭제하시겠습니까?')"
+              >삭제</a
+            >
+            {% else %}
+            <span style="color: #aaa">삭제불가(본인)</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div id="pwdSection" class="pwd-section">
+      <h4>🔒 선택한 관리자 비밀번호 변경</h4>
+      <div class="pwd-form">
+        <input
+          type="password"
+          name="new_password"
+          placeholder="새 비밀번호 입력"
+          id="newPwdInput"
+        />
+        <button
+          type="submit"
+          class="btn-pwd"
+          onclick="return validatePwd()"
+        >
+          변경 적용
+        </button>
       </div>
     </div>
+  </form>
+</div>
+{% endblock %}
 
-    <script>
-      // 전체 선택/해제
-      function toggleSelectAll(source) {
-        const checkboxes = document.getElementsByName("selected_emails");
-        for (let i = 0; i < checkboxes.length; i++) {
-          checkboxes[i].checked = source.checked;
-        }
-        updateVisibility();
-      }
+{% block extra_scripts %}
+<script>
+  // 전체 선택/해제
+  function toggleSelectAll(source) {
+    const checkboxes = document.getElementsByName("selected_emails");
+    for (let i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = source.checked;
+    }
+    updateVisibility();
+  }
 
-      // 체크박스 상태에 따라 변경 폼 노출 여부 결정
-      function updateVisibility() {
-        const checkboxes = document.getElementsByName("selected_emails");
-        const pwdSection = document.getElementById("pwdSection");
-        let anyChecked = false;
-        for (let i = 0; i < checkboxes.length; i++) {
-          if (checkboxes[i].checked) {
-            anyChecked = true;
-            break;
-          }
-        }
-        pwdSection.style.display = anyChecked ? "block" : "none";
+  // 체크박스 상태에 따라 변경 폼 노출 여부 결정
+  function updateVisibility() {
+    const checkboxes = document.getElementsByName("selected_emails");
+    const pwdSection = document.getElementById("pwdSection");
+    let anyChecked = false;
+    for (let i = 0; i < checkboxes.length; i++) {
+      if (checkboxes[i].checked) {
+        anyChecked = true;
+        break;
       }
+    }
+    pwdSection.style.display = anyChecked ? "block" : "none";
+  }
 
-      // 유효성 검사
-      function validatePwd() {
-        const pwd = document.getElementById("newPwdInput").value;
-        if (!pwd) {
-          alert("변경할 비밀번호를 입력해주세요.");
-          return false;
-        }
-        return confirm("선택한 관리자들의 비밀번호를 변경하시겠습니까?");
-      }
-    </script>
-  </body>
-</html>
+  // 유효성 검사
+  function validatePwd() {
+    const pwd = document.getElementById("newPwdInput").value;
+    if (!pwd) {
+      alert("변경할 비밀번호를 입력해주세요.");
+      return false;
+    }
+    return confirm("선택한 관리자들의 비밀번호를 변경하시겠습니까?");
+  }
+</script>
+{% endblock %}

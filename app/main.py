@@ -76,13 +76,13 @@ async def do_login(username: str = Form(...), password: str = Form(...)):
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/")
-    return templates.TemplateResponse("dashboard.html", {"request": request, "admin_email": ADMIN_EMAIL})
+    return templates.TemplateResponse("dashboard.html", {"request": request, "admin_email": ADMIN_EMAIL, "active_page": "dashboard"})
 
 # --- 관리자 관리 로직 ---
 @app.get("/admin/users", response_class=HTMLResponse)
 async def admin_users_page(request: Request, user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/")
-    return templates.TemplateResponse("admin_users.html", {"request": request, "admin_email": ADMIN_EMAIL, "users": admin_users})
+    return templates.TemplateResponse("admin_users.html", {"request": request, "admin_email": ADMIN_EMAIL, "users": admin_users, "active_page": "users"})
 
 @app.post("/admin/users/add")
 async def add_admin(name: str = Form(...), email: str = Form(...), password: str = Form(...), user=Depends(get_current_user)):
@@ -111,7 +111,8 @@ async def schedule_page(request: Request, user=Depends(get_current_user)):
     return templates.TemplateResponse("schedule.html", {
         "request": request, 
         "admin_email": ADMIN_EMAIL, 
-        "schedules": sorted_schedules
+        "schedules": sorted_schedules,
+        "active_page": "schedule"
     })
 
 @app.post("/admin/schedule/add")
@@ -179,7 +180,8 @@ async def admin_members_page(request: Request, user=Depends(get_current_user)):
     return templates.TemplateResponse("members.html", {
         "request": request,
         "admin_email": ADMIN_EMAIL,
-        "members": members
+        "members": members,
+        "active_page": "members"
     })
 
 # [GET] 회원 상태 토글 (정지/활성화)
@@ -218,7 +220,8 @@ async def admin_board_page(request: Request, user=Depends(get_current_user)):
     return templates.TemplateResponse("board_admin.html", {
         "request": request,
         "admin_email": ADMIN_EMAIL,
-        "boards": boards
+        "boards": boards,
+        "active_page": "board"
     })
 
 # [POST] 새 게시판 생성

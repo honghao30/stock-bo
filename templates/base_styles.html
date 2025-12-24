@@ -1,0 +1,144 @@
+<style>
+  /* 공통 기본 스타일 */
+  body {
+    display: flex;
+    margin: 0;
+    font-family: sans-serif;
+    background: #f4f7f6;
+    height: 100vh;
+  }
+
+  /* 사이드바 스타일 */
+  .sidebar {
+    width: 250px;
+    background: #2c3e50;
+    color: white;
+    padding: 20px 0;
+  }
+
+  .sidebar h2 {
+    text-align: center;
+    font-size: 20px;
+    margin-bottom: 30px;
+    color: #ecf0f1;
+  }
+
+  .menu-item {
+    padding: 15px 25px;
+    color: #bdc3c7;
+    text-decoration: none;
+    display: block;
+    transition: background 0.3s;
+  }
+
+  .menu-item:hover,
+  .menu-item.active {
+    background: #34495e;
+    color: white;
+  }
+
+  .menu-item.active {
+    background-color: #3498db;
+    font-weight: bold;
+  }
+
+  /* 메인 콘텐츠 스타일 */
+  .main-content {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+  }
+
+  /* 카드 스타일 */
+  .card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    margin-bottom: 20px;
+  }
+
+  /* 테이블 스타일 */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  th,
+  td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+  }
+
+  th {
+    background: #f8f9fa;
+    color: #333;
+  }
+
+  /* 버튼 기본 스타일 */
+  button,
+  .btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  .btn-primary {
+    background: #3498db;
+    color: white;
+  }
+
+  .btn-danger {
+    background: #e74c3c;
+    color: white;
+  }
+
+  .btn-success {
+    background: #27ae60;
+    color: white;
+  }
+
+  /* 입력 필드 기본 스타일 */
+  input,
+  select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+
+  /* 헤더 스타일 */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .logout-btn {
+    padding: 8px 16px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+  }
+
+  /* 배지 스타일 */
+  .badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+</style>
+

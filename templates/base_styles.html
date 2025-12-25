@@ -27,19 +27,35 @@
     padding: 15px 25px;
     color: #bdc3c7;
     text-decoration: none;
-    display: block;
-    transition: background 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    font-size: 15px;
+  }
+
+  .menu-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    filter: brightness(1.1);
   }
 
   .menu-item:hover,
   .menu-item.active {
     background: #34495e;
     color: white;
+    padding-left: 30px;
   }
 
   .menu-item.active {
     background-color: #3498db;
-    font-weight: bold;
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 #ffffff;
+  }
+
+  .menu-item.active .menu-icon {
+    transform: scale(1.1);
   }
 
   /* 메인 콘텐츠 스타일 */

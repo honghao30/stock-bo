@@ -3,7 +3,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from typing import List
+from sqlalchemy.orm import Session  # [추가] DB 세션 관리
+
+# [추가] utils(암호화), models(테이블), database(연결) 모듈 import
+from app import models, utils
+from app.database import engine, get_db
 
 # 서비스 모듈 import
 from app.services.api_service import finance_api_service
@@ -14,8 +18,8 @@ load_dotenv()
 
 app = FastAPI()
 
-# templates 폴더 위치 확인
-templates = Jinja2Templates(directory="templates")
+# --- [DB 초기화] 서버 시작 시 테이블 생성 및 초기 관리자 등록 ---
+models.Base.metadata.create_all(bind=engine)
 
 # 환경 변수 로드
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
@@ -23,9 +27,32 @@ ADMIN_PW = os.environ.get("ADMIN_PW")
 AUTH_COOKIE_NAME = os.environ.get("AUTH_COOKIE_NAME", "bo_session_id")
 SECRET_TOKEN = os.environ.get("SECRET_TOKEN")
 
-# --- 임시 데이터 저장소 (DB 연결 전) ---
-admin_users = [{"email": ADMIN_EMAIL, "name": "최고관리자"}]
-# 일정 데이터 샘플
+# 초기 관리자 계정 자동 생성 함수 (DB가 비어있을 때 실행)
+def init_admin_user():
+    # DB 세션을 수동으로 생성하여 처리
+    db = next(get_db())
+    try:
+        if ADMIN_EMAIL and ADMIN_PW:
+            existing_user = db.query(models.AdminUser).filter(models.AdminUser.email == ADMIN_EMAIL).first()
+            if not existing_user:
+                print(f"⚠️ 초기 관리자 계정 생성 중: {ADMIN_EMAIL}")
+                hashed_pw = utils.get_password_hash(ADMIN_PW)
+                new_admin = models.AdminUser(email=ADMIN_EMAIL, name="최고관리자", hashed_password=hashed_pw)
+                db.add(new_admin)
+                db.commit()
+                print("✅ 초기 관리자 생성 완료")
+    except Exception as e:
+        print(f"❌ 초기 관리자 생성 실패: {e}")
+    finally:
+        db.close()
+
+# 서버 실행 시 관리자 체크 실행
+init_admin_user()
+
+# templates 폴더 위치 확인
+templates = Jinja2Templates(directory="templates")
+
+# 일정 데이터 샘플 (아직 DB 연결 안 함, 추후 변경 가능)
 schedules = [
     {"id": 1, "date": "2024-03-25", "title": "시스템 정기 점검", "type": "manual"},
     {"id": 2, "date": "2024-03-26", "title": "API 데이터 자동 수집", "type": "api"}
@@ -67,14 +94,24 @@ async def login_page(request: Request):
     </div>
     """
 
-# 5. [POST] /login : 로그인 처리
+# 5. [POST] /login : 로그인 처리 (DB 연동 적용됨)
 @app.post("/login")
-async def do_login(username: str = Form(...), password: str = Form(...)):
-    if username == ADMIN_EMAIL and password == ADMIN_PW:
-        response = RedirectResponse(url="/admin/dashboard", status_code=303)
-        response.set_cookie(key=AUTH_COOKIE_NAME, value=SECRET_TOKEN, httponly=True)
-        return response
-    return HTMLResponse("<script>alert('정보가 일치하지 않습니다.'); window.location.href='/login';</script>")
+async def do_login(
+    username: str = Form(...), 
+    password: str = Form(...),
+    db: Session = Depends(get_db) # DB 주입
+):
+    # 1. DB에서 사용자 조회
+    user = db.query(models.AdminUser).filter(models.AdminUser.email == username).first()
+    
+    # 2. 사용자 검증 (존재 여부 및 비밀번호 일치 여부)
+    if not user or not utils.verify_password(password, user.hashed_password):
+        return HTMLResponse("<script>alert('아이디 또는 비밀번호가 잘못되었습니다.'); window.location.href='/login';</script>")
+    
+    # 3. 로그인 성공 처리
+    response = RedirectResponse(url="/admin/dashboard", status_code=303)
+    response.set_cookie(key=AUTH_COOKIE_NAME, value=SECRET_TOKEN, httponly=True)
+    return response
 
 # 6. [GET] /admin/dashboard : 관리자 대시보드
 @app.get("/admin/dashboard", response_class=HTMLResponse)
@@ -82,35 +119,74 @@ async def admin_dashboard(request: Request, user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/")
     return templates.TemplateResponse("dashboard.html", {"request": request, "admin_email": ADMIN_EMAIL, "active_page": "dashboard"})
 
-# --- 관리자 관리 로직 ---
+# --- 관리자 관리 로직 (DB 연동 적용됨) ---
+
 @app.get("/admin/users", response_class=HTMLResponse)
-async def admin_users_page(request: Request, user=Depends(get_current_user)):
+async def admin_users_page(
+    request: Request, 
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not user: return RedirectResponse(url="/")
-    return templates.TemplateResponse("admin_users.html", {"request": request, "admin_email": ADMIN_EMAIL, "users": admin_users, "active_page": "users"})
+    
+    # DB에서 모든 관리자 조회
+    db_users = db.query(models.AdminUser).all()
+    
+    return templates.TemplateResponse("admin_users.html", {
+        "request": request, 
+        "admin_email": ADMIN_EMAIL, 
+        "users": db_users, 
+        "active_page": "users"
+    })
 
 @app.post("/admin/users/add")
-async def add_admin(name: str = Form(...), email: str = Form(...), password: str = Form(...), user=Depends(get_current_user)):
+async def add_admin(
+    name: str = Form(...), 
+    email: str = Form(...), 
+    password: str = Form(...), 
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not user: return RedirectResponse(url="/", status_code=303)
-    if any(u['email'] == email for u in admin_users):
+    
+    # 중복 이메일 체크
+    if db.query(models.AdminUser).filter(models.AdminUser.email == email).first():
         return HTMLResponse("<script>alert('이미 존재하는 이메일입니다.'); history.back();</script>")
-    admin_users.append({"email": email, "name": name})
+    
+    # DB 저장 (비밀번호 암호화)
+    new_admin = models.AdminUser(
+        email=email, 
+        name=name, 
+        hashed_password=utils.get_password_hash(password)
+    )
+    db.add(new_admin)
+    db.commit()
+    
     return RedirectResponse(url="/admin/users", status_code=303)
 
 @app.get("/admin/users/delete/{email}")
-async def delete_admin(email: str, user=Depends(get_current_user)):
+async def delete_admin(
+    email: str, 
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not user: return RedirectResponse(url="/", status_code=303)
-    if email == ADMIN_EMAIL:
-        return HTMLResponse("<script>alert('본인 계정은 삭제할 수 없습니다.'); location.href='/admin/users';</script>")
-    global admin_users
-    admin_users = [u for u in admin_users if u['email'] != email]
+    if email == ADMIN_EMAIL: # 환경변수에 지정된 최고관리자는 삭제 불가 (선택사항)
+        return HTMLResponse("<script>alert('최고 관리자 계정은 삭제할 수 없습니다.'); location.href='/admin/users';</script>")
+    
+    # DB에서 사용자 찾아 삭제
+    target_user = db.query(models.AdminUser).filter(models.AdminUser.email == email).first()
+    if target_user:
+        db.delete(target_user)
+        db.commit()
+        
     return RedirectResponse(url="/admin/users", status_code=303)
 
-# --- 📅 일정 관리 로직 (신규 추가) ---
+# --- 📅 일정 관리 로직 (기존 유지) ---
 
 @app.get("/admin/schedule", response_class=HTMLResponse)
 async def schedule_page(request: Request, user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/")
-    # 날짜순 정렬하여 전달
     sorted_schedules = sorted(schedules, key=lambda x: x['date'])
     return templates.TemplateResponse("schedule.html", {
         "request": request, 
@@ -132,7 +208,7 @@ async def delete_schedule(sch_id: int, user=Depends(get_current_user)):
     global schedules
     schedules = [s for s in schedules if s['id'] != sch_id]
     return RedirectResponse(url="/admin/schedule", status_code=303)
-# [POST] 일정 수정 처리
+
 @app.post("/admin/schedule/update")
 async def update_schedule(
     sch_id: int = Form(...),
@@ -154,7 +230,6 @@ async def update_schedule(
 @app.post("/admin/schedule/sync-api")
 async def sync_api_schedule(user=Depends(get_current_user)):
     if not user: return RedirectResponse(url="/", status_code=303)
-    # 외부 API에서 일정 데이터 가져오기
     api_items = await schedule_api_service.fetch_schedules_from_api()
     for item in api_items:
         new_id = max([s['id'] for s in schedules], default=0) + 1
@@ -164,108 +239,53 @@ async def sync_api_schedule(user=Depends(get_current_user)):
 # --- 금융위원회 API 데이터 수집 엔드포인트 ---
 @app.get("/api/fetch-data")
 async def fetch_data(user=Depends(get_current_user)):
-    """
-    금융위원회 API에서 모든 데이터를 수집합니다.
-    """
     if not user:
-        return JSONResponse(
-            {"error": "인증이 필요합니다."},
-            status_code=401
-        )
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     
     try:
-        # 모든 금융위원회 데이터 가져오기
         data = await finance_api_service.fetch_all_finance_data()
-        
         return JSONResponse({
             "success": True,
             "message": "데이터 수집이 완료되었습니다.",
             "data": data
         })
     except Exception as e:
-        return JSONResponse(
-            {"error": f"데이터 수집 중 오류가 발생했습니다: {str(e)}"},
-            status_code=500
-        )
+        return JSONResponse({"error": f"데이터 수집 중 오류가 발생했습니다: {str(e)}"}, status_code=500)
 
 @app.get("/api/disclosure-info")
-async def get_disclosure_info(
-    request: Request,
-    page_no: int = 1,
-    num_of_rows: int = 10,
-    user=Depends(get_current_user)
-):
-    """배당공시정보 조회 (getDiviDiscInfo_V2)"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    
+async def get_disclosure_info(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
+    if not user: return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_disclosure_info(page_no, num_of_rows)
     return JSONResponse(data)
 
 @app.get("/api/capital-increase-info")
-async def get_capital_increase_info(
-    request: Request,
-    page_no: int = 1,
-    num_of_rows: int = 10,
-    user=Depends(get_current_user)
-):
-    """공모주/유상증자 공시정보 조회 (getCapiIncrWithConsDiscInfo_V2)"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    
+async def get_capital_increase_info(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
+    if not user: return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_capital_increase_info(page_no, num_of_rows)
     return JSONResponse(data)
 
 @app.get("/api/bonus-issuance-info")
-async def get_bonus_issuance_info(
-    request: Request,
-    page_no: int = 1,
-    num_of_rows: int = 10,
-    user=Depends(get_current_user)
-):
-    """무상증자 공시정보 조회 (getBonuIssuDiscInfo_V2)"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    
+async def get_bonus_issuance_info(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
+    if not user: return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_bonus_issuance_info(page_no, num_of_rows)
     return JSONResponse(data)
 
 @app.get("/api/stock-issuance")
-async def get_stock_issuance(
-    request: Request,
-    page_no: int = 1,
-    num_of_rows: int = 10,
-    user=Depends(get_current_user)
-):
-    """주식발행 공시정보 조회"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    
+async def get_stock_issuance(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
+    if not user: return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_stock_issuance_info(page_no, num_of_rows)
     return JSONResponse(data)
 
 @app.get("/api/stock-price")
-async def get_stock_price(
-    request: Request,
-    page_no: int = 1,
-    num_of_rows: int = 10,
-    bas_dt: str = None,
-    user=Depends(get_current_user)
-):
-    """주식시세정보 조회 (bas_dt: 기준일자 YYYYMMDD 형식, 없으면 오늘 날짜 사용)"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    
+async def get_stock_price(request: Request, page_no: int = 1, num_of_rows: int = 10, bas_dt: str = None, user=Depends(get_current_user)):
+    if not user: return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_stock_price_info(page_no, num_of_rows, bas_dt)
     return JSONResponse(data)
 
 # --- 금융위원회 데이터 확인 페이지 ---
 @app.get("/admin/finance-data", response_class=HTMLResponse)
 async def finance_data_page(request: Request, user=Depends(get_current_user)):
-    """금융위원회 데이터 확인 페이지"""
-    if not user:
-        return RedirectResponse(url="/")
-    
+    if not user: return RedirectResponse(url="/")
     return templates.TemplateResponse("finance_data.html", {
         "request": request,
         "admin_email": ADMIN_EMAIL,
@@ -346,7 +366,6 @@ async def create_board(
 ):
     if not user: return RedirectResponse(url="/", status_code=303)
     
-    # 고유 ID 생성 (B + 숫자)
     new_id = f"B{len(boards) + 1:03d}"
     from datetime import date
     
@@ -387,4 +406,4 @@ async def delete_board(board_id: str, user=Depends(get_current_user)):
     
     global boards
     boards = [b for b in boards if b['id'] != board_id]
-    return RedirectResponse(url="/admin/board", status_code=303)    
+    return RedirectResponse(url="/admin/board", status_code=303)

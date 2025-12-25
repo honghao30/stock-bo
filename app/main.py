@@ -195,11 +195,39 @@ async def get_disclosure_info(
     num_of_rows: int = 10,
     user=Depends(get_current_user)
 ):
-    """공시정보 조회"""
+    """배당공시정보 조회 (getDiviDiscInfo_V2)"""
     if not user:
         return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     
     data = await finance_api_service.fetch_disclosure_info(page_no, num_of_rows)
+    return JSONResponse(data)
+
+@app.get("/api/capital-increase-info")
+async def get_capital_increase_info(
+    request: Request,
+    page_no: int = 1,
+    num_of_rows: int = 10,
+    user=Depends(get_current_user)
+):
+    """공모주/유상증자 공시정보 조회 (getCapiIncrWithConsDiscInfo_V2)"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    data = await finance_api_service.fetch_capital_increase_info(page_no, num_of_rows)
+    return JSONResponse(data)
+
+@app.get("/api/bonus-issuance-info")
+async def get_bonus_issuance_info(
+    request: Request,
+    page_no: int = 1,
+    num_of_rows: int = 10,
+    user=Depends(get_current_user)
+):
+    """무상증자 공시정보 조회 (getBonuIssuDiscInfo_V2)"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    data = await finance_api_service.fetch_bonus_issuance_info(page_no, num_of_rows)
     return JSONResponse(data)
 
 @app.get("/api/stock-issuance")
@@ -221,13 +249,14 @@ async def get_stock_price(
     request: Request,
     page_no: int = 1,
     num_of_rows: int = 10,
+    bas_dt: str = None,
     user=Depends(get_current_user)
 ):
-    """주식시세정보 조회"""
+    """주식시세정보 조회 (bas_dt: 기준일자 YYYYMMDD 형식, 없으면 오늘 날짜 사용)"""
     if not user:
         return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     
-    data = await finance_api_service.fetch_stock_price_info(page_no, num_of_rows)
+    data = await finance_api_service.fetch_stock_price_info(page_no, num_of_rows, bas_dt)
     return JSONResponse(data)
 
 # --- 금융위원회 데이터 확인 페이지 ---

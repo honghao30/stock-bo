@@ -81,40 +81,54 @@
 
 {% block content %}
 <div class="card">
-  <h2 style="color: #2c3e50; margin-top: 0">📊 금융위원회 데이터 확인</h2>
+  <h2 style="color: #2c3e50; margin-top: 0">📊 금융위원회 공시정보 확인</h2>
   <p style="color: #666">
-    금융위원회 공개데이터포털에서 제공하는 3가지 API 데이터를 확인할 수 있습니다.
+    금융위원회 공개데이터포털에서 제공하는 3가지 공시정보를 확인할 수 있습니다.
   </p>
   <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0" />
 
-  <!-- 공시정보 -->
+  <!-- 배당공시정보 -->
   <div class="data-section">
     <h3>
-      📋 공시정보 (GetDiscInfoService_V2)
-      <span class="info-badge" id="disclosure-status">대기중</span>
+      💰 배당공시정보 (getDiviDiscInfo_V2)
+      <span class="info-badge" id="dividend-status">대기중</span>
     </h3>
-    <button class="btn-fetch" onclick="fetchDisclosureInfo()">
-      공시정보 가져오기
+    <button class="btn-fetch" onclick="fetchDividendInfo()">
+      배당공시정보 가져오기
     </button>
-    <div id="disclosure-data" class="data-display" style="display: none;"></div>
+    <div id="dividend-data" class="data-display" style="display: none;"></div>
   </div>
 
-  <!-- 주식발행 공시정보 -->
+  <!-- 공모주/유상증자 공시정보 -->
   <div class="data-section">
     <h3>
-      📈 주식발행 공시정보
-      <span class="info-badge" id="issuance-status">대기중</span>
+      📈 공모주/유상증자 공시정보 (getCapiIncrWithConsDiscInfo_V2)
+      <span class="info-badge" id="capital-increase-status">대기중</span>
     </h3>
-    <button class="btn-fetch" onclick="fetchStockIssuance()">
-      주식발행 정보 가져오기
+    <button class="btn-fetch" onclick="fetchCapitalIncreaseInfo()">
+      공모주/유상증자 정보 가져오기
     </button>
-    <div id="issuance-data" class="data-display" style="display: none;"></div>
+    <div id="capital-increase-data" class="data-display" style="display: none;"></div>
   </div>
 
-  <!-- 주식시세정보 -->
+  <!-- 무상증자 공시정보 -->
   <div class="data-section">
     <h3>
-      💹 주식시세정보
+      🎁 무상증자 공시정보 (getBonuIssuDiscInfo_V2)
+      <span class="info-badge" id="bonus-issuance-status">대기중</span>
+    </h3>
+    <button class="btn-fetch" onclick="fetchBonusIssuanceInfo()">
+      무상증자 정보 가져오기
+    </button>
+    <div id="bonus-issuance-data" class="data-display" style="display: none;"></div>
+  </div>
+
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0" />
+
+  <!-- 주식시세정보 (참고용) -->
+  <div class="data-section">
+    <h3>
+      💹 주식시세정보 (참고용)
       <span class="info-badge" id="price-status">대기중</span>
     </h3>
     <button class="btn-fetch" onclick="fetchStockPrice()">
@@ -123,22 +137,23 @@
     <div id="price-data" class="data-display" style="display: none;"></div>
   </div>
 
-  <!-- 전체 데이터 가져오기 -->
+  <!-- 전체 공시정보 일괄 수집 -->
   <div class="data-section">
-    <h3>🔄 전체 데이터 일괄 수집</h3>
-    <button class="btn-fetch" onclick="fetchAllData()" style="background: #27ae60;">
-      모든 데이터 가져오기
+    <h3>🔄 전체 공시정보 일괄 수집</h3>
+    <button class="btn-fetch" onclick="fetchAllDisclosureData()" style="background: #27ae60;">
+      모든 공시정보 가져오기
     </button>
-    <div id="all-data" class="data-display" style="display: none;"></div>
+    <div id="all-disclosure-data" class="data-display" style="display: none;"></div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-  async function fetchDisclosureInfo() {
-    const statusEl = document.getElementById('disclosure-status');
-    const dataEl = document.getElementById('disclosure-data');
+  // 배당공시정보 조회
+  async function fetchDividendInfo() {
+    const statusEl = document.getElementById('dividend-status');
+    const dataEl = document.getElementById('dividend-data');
     
     statusEl.textContent = '로딩중...';
     statusEl.style.background = '#fff3cd';
@@ -162,9 +177,10 @@
     }
   }
 
-  async function fetchStockIssuance() {
-    const statusEl = document.getElementById('issuance-status');
-    const dataEl = document.getElementById('issuance-data');
+  // 공모주/유상증자 공시정보 조회
+  async function fetchCapitalIncreaseInfo() {
+    const statusEl = document.getElementById('capital-increase-status');
+    const dataEl = document.getElementById('capital-increase-data');
     
     statusEl.textContent = '로딩중...';
     statusEl.style.background = '#fff3cd';
@@ -173,7 +189,34 @@
     dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
 
     try {
-      const response = await fetch('/api/stock-issuance?page_no=1&num_of_rows=10');
+      const response = await fetch('/api/capital-increase-info?page_no=1&num_of_rows=10');
+      const data = await response.json();
+      
+      statusEl.textContent = '완료';
+      statusEl.style.background = '#d4edda';
+      statusEl.style.color = '#155724';
+      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    } catch (error) {
+      statusEl.textContent = '오류';
+      statusEl.style.background = '#f8d7da';
+      statusEl.style.color = '#721c24';
+      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+    }
+  }
+
+  // 무상증자 공시정보 조회
+  async function fetchBonusIssuanceInfo() {
+    const statusEl = document.getElementById('bonus-issuance-status');
+    const dataEl = document.getElementById('bonus-issuance-data');
+    
+    statusEl.textContent = '로딩중...';
+    statusEl.style.background = '#fff3cd';
+    statusEl.style.color = '#856404';
+    dataEl.style.display = 'block';
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/bonus-issuance-info?page_no=1&num_of_rows=10');
       const data = await response.json();
       
       statusEl.textContent = '완료';
@@ -214,21 +257,33 @@
     }
   }
 
-  async function fetchAllData() {
-    const dataEl = document.getElementById('all-data');
+  // 전체 공시정보 일괄 수집
+  async function fetchAllDisclosureData() {
+    const dataEl = document.getElementById('all-disclosure-data');
     dataEl.style.display = 'block';
-    dataEl.innerHTML = '<div class="loading">모든 데이터를 가져오는 중...</div>';
+    dataEl.innerHTML = '<div class="loading">모든 공시정보를 가져오는 중...</div>';
 
     try {
-      const response = await fetch('/api/fetch-data');
-      const result = await response.json();
-      
-      if (result.success) {
-        dataEl.innerHTML = '<div class="success">✅ 모든 데이터 수집 완료!</div><pre>' + 
-          JSON.stringify(result.data, null, 2) + '</pre>';
-      } else {
-        dataEl.innerHTML = '<div class="error">오류: ' + (result.error || '알 수 없는 오류') + '</div>';
-      }
+      // 3가지 공시정보를 병렬로 가져오기
+      const [dividendRes, capitalRes, bonusRes] = await Promise.all([
+        fetch('/api/disclosure-info?page_no=1&num_of_rows=10'),
+        fetch('/api/capital-increase-info?page_no=1&num_of_rows=10'),
+        fetch('/api/bonus-issuance-info?page_no=1&num_of_rows=10')
+      ]);
+
+      const dividendData = await dividendRes.json();
+      const capitalData = await capitalRes.json();
+      const bonusData = await bonusRes.json();
+
+      const allData = {
+        dividend: dividendData,
+        capitalIncrease: capitalData,
+        bonusIssuance: bonusData,
+        fetched_at: new Date().toISOString()
+      };
+
+      dataEl.innerHTML = '<div class="success">✅ 모든 공시정보 수집 완료!</div><pre>' + 
+        JSON.stringify(allData, null, 2) + '</pre>';
     } catch (error) {
       dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
     }

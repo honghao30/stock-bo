@@ -95,8 +95,15 @@
   <form action="/admin/schedule/add" method="post" class="add-form">
     <input type="date" name="date" required />
     <input
+    type="text"
+    name="subject"
+    placeholder="일정 제목을 입력하세요"
+    style="width: 300px"
+    required
+  />
+    <input
       type="text"
-      name="title"
+      name="content"
       placeholder="일정 내용을 입력하세요"
       style="width: 300px"
       required
@@ -112,6 +119,7 @@
       <tr>
         <th>날짜</th>
         <th>구분</th>
+        <th>일정 제목</th>
         <th>일정 내용</th>
         <th>관리</th>
       </tr>
@@ -126,10 +134,11 @@
             >{{ 'API' if s.type == 'api' else '수동' }}</span
           >
         </td>
-        <td>{{ s.title }}</td>
+        <td>{{ s.subject }}</td>
+        <td>{{ s.content }}</td>
         <td>
           <button
-            onclick="openEditModal('{{ s.id }}', '{{ s.date }}', '{{ s.title }}')"
+            onclick="openEditModal('{{ s.id }}', '{{ s.date }}', '{{ s.subject }}', '{{ s.content }}')"
             style="
               color: #3498db;
               background: none;
@@ -162,8 +171,10 @@
       <input type="hidden" name="sch_id" id="edit_id" />
       <label>날짜</label>
       <input type="date" name="date" id="edit_date" required />
+      <label>제목</label>
+      <input type="text" name="subject" id="edit_subject" required />
       <label>내용</label>
-      <input type="text" name="title" id="edit_title" required />
+      <input type="text" name="content" id="edit_content" required />
       <div class="btn-group">
         <button
           type="button"
@@ -181,10 +192,11 @@
 
 {% block extra_scripts %}
 <script>
-  function openEditModal(id, date, title) {
+    function openEditModal(id, date, subject, content) {
     document.getElementById("edit_id").value = id;
     document.getElementById("edit_date").value = date;
-    document.getElementById("edit_title").value = title;
+    document.getElementById("edit_subject").value = subject;
+    document.getElementById("edit_content").value = content;
     document.getElementById("editModal").style.display = "flex";
   }
 

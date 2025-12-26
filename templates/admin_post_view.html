@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} - {{ board.name }} - BO System{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .post-container {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .post-header {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
+
+  .post-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin: 0 0 15px 0;
+  }
+
+  .post-meta {
+    display: flex;
+    gap: 20px;
+    color: #7f8c8d;
+    font-size: 14px;
+  }
+
+  .post-content {
+    padding: 20px 0;
+    line-height: 1.8;
+    color: #34495e;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .post-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+  }
+
+  .btn-back {
+    background: #95a5a6;
+    color: white;
+  }
+
+  .btn-back:hover {
+    background: #7f8c8d;
+  }
+
+  .btn-edit {
+    background: #3498db;
+    color: white;
+  }
+
+  .btn-edit:hover {
+    background: #2980b9;
+  }
+
+  .btn-delete {
+    background: #e74c3c;
+    color: white;
+  }
+
+  .btn-delete:hover {
+    background: #c0392b;
+  }
+
+  .board-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/admin/board/{{ board.id }}/posts" class="btn-back" style="margin-bottom: 20px;">← 게시글 목록으로</a>
+
+<div class="post-container">
+  <div class="board-info">
+    <strong>게시판:</strong> {{ board.name }} ({{ board.id }})
+  </div>
+
+  <div class="post-header">
+    <h1 class="post-title">{{ post.title }}</h1>
+    <div class="post-meta">
+      <span>작성자: {{ post.author }}</span>
+      <span>작성일: {{ post.created_at }}</span>
+      {% if post.updated_at and post.updated_at != post.created_at %}
+      <span>수정일: {{ post.updated_at }}</span>
+      {% endif %}
+      <span>조회수: {{ post.views }}</span>
+    </div>
+  </div>
+
+  <div class="post-content">{{ post.content }}</div>
+
+  <div class="post-actions">
+    <a href="/admin/board/{{ board.id }}/posts" class="btn btn-back">목록</a>
+    <a href="/admin/board/{{ board.id }}/post/{{ post.id }}/edit" class="btn btn-edit">수정</a>
+    <a 
+      href="/admin/board/{{ board.id }}/post/{{ post.id }}/delete" 
+      class="btn btn-delete"
+      onclick="return confirm('이 게시글을 삭제하시겠습니까?')"
+    >삭제</a>
+  </div>
+</div>
+{% endblock %}
+

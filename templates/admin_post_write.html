@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}게시글 작성 - {{ board.name }} - BO System{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .form-container {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #2c3e50;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  .form-group textarea {
+    min-height: 300px;
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .btn-cancel {
+    padding: 10px 20px;
+    background: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn-submit {
+    padding: 10px 20px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  .btn-cancel:hover {
+    background: #7f8c8d;
+  }
+
+  .btn-submit:hover {
+    background: #2980b9;
+  }
+
+  .board-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/admin/board/{{ board.id }}/posts" class="btn-back">← 게시글 목록으로</a>
+
+<div class="form-container">
+  <div class="board-info">
+    <strong>게시판:</strong> {{ board.name }} ({{ board.id }})
+  </div>
+
+  <h2 style="margin-top: 0">✏️ 새 게시글 작성</h2>
+
+  <form action="/admin/board/{{ board.id }}/write" method="post">
+    <div class="form-group">
+      <label for="title">제목 *</label>
+      <input
+        type="text"
+        id="title"
+        name="title"
+        placeholder="게시글 제목을 입력하세요"
+        required
+        maxlength="255"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="content">내용 *</label>
+      <textarea
+        id="content"
+        name="content"
+        placeholder="게시글 내용을 입력하세요"
+        required
+      ></textarea>
+    </div>
+
+    <div class="btn-group">
+      <a href="/admin/board/{{ board.id }}/posts" class="btn-cancel">취소</a>
+      <button type="submit" class="btn-submit">작성 완료</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

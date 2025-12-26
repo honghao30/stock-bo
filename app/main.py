@@ -18,6 +18,17 @@ app = FastAPI()
 # DB 초기화: 서버 시작 시 테이블 생성
 models.Base.metadata.create_all(bind=engine)
 
+# 마이그레이션 실행
+def run_migrations():
+    """DB 마이그레이션 실행"""
+    try:
+        from app.migrations.add_schedule_columns import migrate_schedule_table
+        migrate_schedule_table()
+    except Exception as e:
+        print(f"⚠️ 마이그레이션 실행 중 오류 (무시 가능): {e}")
+
+run_migrations()
+
 
 def init_admin_user():
     """초기 관리자 계정 자동 생성 함수 (DB가 비어있을 때 실행)"""

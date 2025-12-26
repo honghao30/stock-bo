@@ -8,8 +8,10 @@
     {% block extra_styles %}{% endblock %}
   </head>
   <body>
+    {% if active_page is not none %}
     {% include "sidebar.html" %}
-    <div class="main-content">
+    {% endif %}
+    <div class="main-content" {% if active_page is none %}style="margin-left: 0; width: 100%;"{% endif %}>
       {% block content %}{% endblock %}
     </div>
     {% block extra_scripts %}{% endblock %}

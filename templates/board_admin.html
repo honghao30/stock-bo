@@ -140,7 +140,15 @@
     <tbody>
       {% for b in boards %}
       <tr>
-        <td><code>{{ b.id }}</code></td>
+        <td>
+          <a 
+            href="/admin/board/{{ b.id }}/posts" 
+            style="color: #3498db; text-decoration: none; font-weight: bold;"
+            title="게시글 목록 보기"
+          >
+            <code>{{ b.id }}</code>
+          </a>
+        </td>
         <td style="font-weight: bold">{{ b.name }}</td>
         <td>
           <span

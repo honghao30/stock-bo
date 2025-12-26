@@ -1,7 +1,4 @@
-{% extends "base.html" %}
-
-{% block title %}게시판 관리 - BO System{% endblock %}
-
+{% extends "base.html" %} {% block title %}게시판 관리 - BO System{% endblock %}
 {% block extra_styles %}
 <style>
   .form-group {
@@ -96,9 +93,7 @@
     font-weight: bold;
   }
 </style>
-{% endblock %}
-
-{% block content %}
+{% endblock %} {% block content %}
 <div class="card">
   <h2 style="margin-top: 0">🛠️ 새 게시판 생성</h2>
   <form action="/admin/board/create" method="post">
@@ -111,8 +106,8 @@
         style="flex: 2"
       />
       <select name="type" required style="flex: 1">
-        <option value="korean">일반 한국형 (목록형)</option>
-        <option value="guestbook">방명록 (댓글/대댓글 중심)</option>
+        <option value="korean">📝 일반형 (Korean)</option>
+        <option value="guestbook">💬 방명록 (Guestbook)</option>
       </select>
       <select name="auth" required style="flex: 1">
         <option value="all">누구나 (비회원 포함)</option>
@@ -141,13 +136,22 @@
       {% for b in boards %}
       <tr>
         <td>
-          <a 
-            href="/admin/board/{{ b.id }}/posts" 
-            style="color: #3498db; text-decoration: none; font-weight: bold;"
-            title="게시글 목록 보기"
+          {% if b.type in ['guestbook', 'guest'] or '방명록' in b.name %}
+          <a
+            href="/board/{{ b.id }}"
+            target="_blank"
+            style="color: #e67e22; font-weight: bold; text-decoration: none"
           >
-            <code>{{ b.id }}</code>
+            {{ b.id }} ↗️
           </a>
+          {% else %}
+          <a
+            href="/admin/board/{{ b.id }}/posts"
+            style="color: #3498db; font-weight: bold; text-decoration: none"
+          >
+            {{ b.id }} ⚙️
+          </a>
+          {% endif %}
         </td>
         <td style="font-weight: bold">{{ b.name }}</td>
         <td>
@@ -158,8 +162,8 @@
           </span>
         </td>
         <td>
-          {% if b.auth == 'all' %}누구나 {% elif b.auth == 'member' %}회원
-          {% else %}관리자{% endif %}
+          {% if b.auth == 'all' %}누구나 {% elif b.auth == 'member' %}회원 {%
+          else %}관리자{% endif %}
         </td>
         <td>{{ b.created_at }}</td>
         <td>
@@ -240,9 +244,7 @@
     </form>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
+{% endblock %} {% block extra_scripts %}
 <script>
   function openEditModal(id, name, type, auth) {
     document.getElementById("edit_board_id").value = id;

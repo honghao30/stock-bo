@@ -232,6 +232,73 @@ async def board_list_page(
     })
 
 
+# 일반 사용자용 게시글 상세 보기는 write보다 먼저 와야 함 (라우터 순서 중요)
+@router.get("/board/{board_id}/post/{post_id}", response_class=HTMLResponse)
+async def public_post_view_page(
+    board_id: str,
+    post_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """일반 사용자용 게시글 상세 보기 페이지"""
+    # 게시판 조회
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    # 게시글 조회
+    post = db.query(models.Post).filter(
+        models.Post.id == post_id,
+        models.Post.board_id == board_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    # 조회수 증가
+    post.views = (post.views or 0) + 1
+    db.commit()
+    
+    board_dict = {
+        "id": board.id,
+        "name": board.name,
+        "type": board.type
+    }
+    
+    post_dict = {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "author": post.author or "관리자",
+        "views": post.views or 0,
+        "created_at": post.created_at.strftime("%Y-%m-%d %H:%M") if post.created_at else None,
+        "updated_at": post.updated_at.strftime("%Y-%m-%d %H:%M") if post.updated_at else None
+    }
+    
+    return templates.TemplateResponse("post_view.html", {
+        "request": request,
+        "board": board_dict,
+        "post": post_dict,
+        "active_page": None  # 사이드바 비활성화
+    })
+
+
+@router.get("/board/{board_id}/posts/write", response_class=HTMLResponse)
+async def public_write_post_redirect(
+    board_id: str,
+    request: Request,
+    user=Depends(get_current_user)
+):
+    """일반 사용자용 글쓰기 페이지 접근 시 관리자 인증 확인 후 리다이렉트"""
+    # 관리자가 로그인되어 있으면 관리자용 글쓰기 페이지로 리다이렉트
+    if user:
+        return RedirectResponse(url=f"/admin/board/{board_id}/write", status_code=303)
+    
+    # 관리자가 아니면 게시판 목록으로 리다이렉트
+    return RedirectResponse(url=f"/board/{board_id}", status_code=303)
+
+
 @router.get("/board/{board_id}", response_class=HTMLResponse)
 async def board_detail_page(
     board_id: str,
@@ -277,16 +344,241 @@ async def board_detail_page(
     })
 
 
-@router.get("/board/{board_id}/write", response_class=HTMLResponse)
-async def public_write_post_redirect(
+# --- 게시글 관리 기능 ---
+
+@router.get("/admin/board/{board_id}/write", response_class=HTMLResponse)
+async def write_post_page(
     board_id: str,
     request: Request,
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """일반 사용자용 글쓰기 페이지 접근 시 관리자 인증 확인 후 리다이렉트"""
-    # 관리자가 로그인되어 있으면 관리자용 글쓰기 페이지로 리다이렉트
-    if user:
-        return RedirectResponse(url=f"/admin/board/{board_id}/write", status_code=303)
+    """게시글 작성 페이지"""
+    if not user:
+        return RedirectResponse(url="/")
     
-    # 관리자가 아니면 게시판 목록으로 리다이렉트
-    return RedirectResponse(url=f"/board/{board_id}", status_code=303)
+    # 게시판 조회
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    board_dict = {
+        "id": board.id,
+        "name": board.name,
+        "type": board.type,
+        "auth": board.auth
+    }
+    
+    return templates.TemplateResponse("admin_post_write.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "board": board_dict,
+        "active_page": "board"
+    })
+
+
+@router.post("/admin/board/{board_id}/write")
+async def create_post(
+    board_id: str,
+    title: str = Form(...),
+    content: str = Form(...),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 작성"""
+    if not user:
+        return RedirectResponse(url="/", status_code=303)
+    
+    # 게시판 조회
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    try:
+        # 새 게시글 생성
+        new_post = models.Post(
+            board_id=board_id,
+            title=title,
+            content=content,
+            author=ADMIN_EMAIL
+        )
+        
+        db.add(new_post)
+        db.commit()
+        db.refresh(new_post)
+        
+        return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"게시글 작성 실패: {str(e)}")
+
+
+@router.get("/admin/board/{board_id}/post/{post_id}", response_class=HTMLResponse)
+async def view_post_page(
+    board_id: str,
+    post_id: int,
+    request: Request,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 상세 보기 페이지"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    # 게시판 조회
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    # 게시글 조회
+    post = db.query(models.Post).filter(
+        models.Post.id == post_id,
+        models.Post.board_id == board_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    # 조회수 증가
+    post.views = (post.views or 0) + 1
+    db.commit()
+    
+    board_dict = {
+        "id": board.id,
+        "name": board.name,
+        "type": board.type
+    }
+    
+    post_dict = {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "author": post.author or "관리자",
+        "views": post.views or 0,
+        "created_at": post.created_at.strftime("%Y-%m-%d %H:%M") if post.created_at else None,
+        "updated_at": post.updated_at.strftime("%Y-%m-%d %H:%M") if post.updated_at else None
+    }
+    
+    return templates.TemplateResponse("admin_post_view.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "board": board_dict,
+        "post": post_dict,
+        "active_page": "board"
+    })
+
+
+@router.get("/admin/board/{board_id}/post/{post_id}/edit", response_class=HTMLResponse)
+async def edit_post_page(
+    board_id: str,
+    post_id: int,
+    request: Request,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 수정 페이지"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    # 게시판 조회
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    # 게시글 조회
+    post = db.query(models.Post).filter(
+        models.Post.id == post_id,
+        models.Post.board_id == board_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    board_dict = {
+        "id": board.id,
+        "name": board.name,
+        "type": board.type
+    }
+    
+    post_dict = {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content
+    }
+    
+    return templates.TemplateResponse("admin_post_edit.html", {
+        "request": request,
+        "admin_email": ADMIN_EMAIL,
+        "board": board_dict,
+        "post": post_dict,
+        "active_page": "board"
+    })
+
+
+@router.post("/admin/board/{board_id}/post/{post_id}/edit")
+async def update_post(
+    board_id: str,
+    post_id: int,
+    title: str = Form(...),
+    content: str = Form(...),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 수정"""
+    if not user:
+        return RedirectResponse(url="/", status_code=303)
+    
+    # 게시글 조회
+    post = db.query(models.Post).filter(
+        models.Post.id == post_id,
+        models.Post.board_id == board_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        # 게시글 정보 업데이트
+        post.title = title
+        post.content = content
+        
+        db.commit()
+        db.refresh(post)
+        
+        return RedirectResponse(url=f"/admin/board/{board_id}/post/{post_id}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"게시글 수정 실패: {str(e)}")
+
+
+@router.get("/admin/board/{board_id}/post/{post_id}/delete")
+async def delete_post(
+    board_id: str,
+    post_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 삭제"""
+    if not user:
+        return RedirectResponse(url="/", status_code=303)
+    
+    # 게시글 조회
+    post = db.query(models.Post).filter(
+        models.Post.id == post_id,
+        models.Post.board_id == board_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        db.delete(post)
+        db.commit()
+        return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"게시글 삭제 실패: {str(e)}")

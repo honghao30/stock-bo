@@ -1,98 +1,59 @@
-{% extends "base.html" %}
-
-{% block title %}{{ post.title }} - {{ board.name }} - BO System{% endblock %}
-
-{% block extra_styles %}
-<style>
-  .post-container {
+{% extends "base.html" %} {% block title %}{{ post.title }} - {{ board.name }}{%
+endblock %} {% block content %}
+<div
+  style="
+    max-width: 800px;
+    margin: 30px auto;
+    padding: 20px;
     background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  }
-
-  .post-header {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 20px;
-    margin-bottom: 20px;
-  }
-
-  .post-title {
-    font-size: 24px;
-    font-weight: bold;
-    color: #2c3e50;
-    margin: 0 0 15px 0;
-  }
-
-  .post-meta {
-    display: flex;
-    gap: 20px;
-    color: #7f8c8d;
-    font-size: 14px;
-  }
-
-  .post-content {
-    padding: 20px 0;
-    line-height: 1.8;
-    color: #34495e;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-
-  .post-actions {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-  }
-
-  .btn-back {
-    display: inline-block;
-    padding: 10px 20px;
-    background: #95a5a6;
-    color: white;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: bold;
-  }
-
-  .btn-back:hover {
-    background: #7f8c8d;
-  }
-
-  .board-info {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-  }
-</style>
-{% endblock %}
-
-{% block content %}
-<a href="/board/{{ board.id }}" class="btn-back" style="margin-bottom: 20px;">← 게시글 목록으로</a>
-
-<div class="post-container">
-  <div class="board-info">
-    <strong>게시판:</strong> {{ board.name }} ({{ board.id }})
-  </div>
-
-  <div class="post-header">
-    <h1 class="post-title">{{ post.title }}</h1>
-    <div class="post-meta">
-      <span>작성자: {{ post.author }}</span>
-      <span>작성일: {{ post.created_at }}</span>
-      {% if post.updated_at and post.updated_at != post.created_at %}
-      <span>수정일: {{ post.updated_at }}</span>
-      {% endif %}
-      <span>조회수: {{ post.views }}</span>
+    border-radius: 8px;
+    border: 1px solid #ddd;
+  "
+>
+  <div
+    style="
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    "
+  >
+    <h4 style="color: #666; margin: 0">{{ board.name }}</h4>
+    <h1 style="margin: 10px 0; color: #333">{{ post.title }}</h1>
+    <div style="font-size: 0.9rem; color: #888">
+      <span>작성자: {{ post.author or '익명' }}</span> |
+      <span
+        >날짜: {{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at
+        else '' }}</span
+      >
+      |
+      <span>조회: {{ post.views }}</span>
     </div>
   </div>
 
-  <div class="post-content">{{ post.content }}</div>
+  <div
+    style="
+      min-height: 200px;
+      line-height: 1.6;
+      color: #444;
+      white-space: pre-wrap;
+    "
+  >
+    {{ post.content }}
+  </div>
 
-  <div class="post-actions">
-    <a href="/board/{{ board.id }}" class="btn-back">목록으로</a>
+  <div style="margin-top: 30px; text-align: center">
+    <a
+      href="/board/{{ board.id }}"
+      style="
+        display: inline-block;
+        padding: 10px 30px;
+        background: #eee;
+        color: #333;
+        text-decoration: none;
+        border-radius: 4px;
+      "
+      >목록으로</a
+    >
   </div>
 </div>
 {% endblock %}
-

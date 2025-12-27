@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_member
 from app.config import ADMIN_EMAIL
 from app.database import get_db
 from app import models
@@ -34,25 +34,57 @@ def format_file_size(bytes: int) -> str:
 def parse_attached_files(content: str) -> List[dict]:
     """content에서 첨부파일 정보를 파싱하여 반환"""
     if not content:
+        print("[DEBUG] parse_attached_files: content가 비어있음")
         return []
     
     files = []
     # HTML 주석에서 첨부 파일 정보 추출
-    pattern = r'<!--\s*ATTACHED_FILES:\s*(\[[\s\S]*?\])\s*-->'
-    match = re.search(pattern, content)
+    # 여러 패턴 시도: 공백이 있는 경우와 없는 경우
+    patterns = [
+        r'<!--\s*ATTACHED_FILES:\s*(\[[\s\S]*?\])\s*-->',  # 공백 포함
+        r'<!--ATTACHED_FILES:(\[[\s\S]*?\])-->',  # 공백 없음
+    ]
+    
+    match = None
+    matched_pattern = None
+    for pattern in patterns:
+        match = re.search(pattern, content)
+        if match:
+            matched_pattern = pattern
+            print(f"[DEBUG] parse_attached_files: 패턴 매칭 성공")
+            break
     
     if match:
         try:
-            files = json.loads(match.group(1))
+            json_str = match.group(1)
+            print(f"[DEBUG] parse_attached_files: JSON 문자열 길이 = {len(json_str)}")
+            files = json.loads(json_str)
+            print(f"[DEBUG] parse_attached_files: 파싱 성공, 파일 개수 = {len(files) if isinstance(files, list) else 0}")
+            
             # 파일 크기 포맷팅 추가
             for file in files:
                 if 'size' in file and file['size']:
                     file['formatted_size'] = format_file_size(file['size'])
+                print(f"[DEBUG] 파일 정보: filename={file.get('filename')}, path={file.get('path')}, type={file.get('type')}")
         except (json.JSONDecodeError, Exception) as e:
-            print(f"첨부파일 파싱 오류: {e}")
+            print(f"[ERROR] 첨부파일 파싱 오류: {e}")
+            print(f"[ERROR] JSON 문자열 (처음 500자): {json_str[:500] if 'json_str' in locals() else 'N/A'}")
             return []
+    else:
+        print(f"[DEBUG] parse_attached_files: 주석 패턴을 찾을 수 없음")
+        print(f"[DEBUG] content 샘플 (마지막 500자): {content[-500:]}")
     
     return files if isinstance(files, list) else []
+
+
+def clean_content(content: str) -> str:
+    """content에서 HTML 주석(첨부파일 정보)을 제거하여 반환"""
+    if not content:
+        return content
+    
+    # HTML 주석 제거 (첨부파일 정보 주석)
+    cleaned = re.sub(r'<!--\s*ATTACHED_FILES:[\s\S]*?-->', '', content)
+    return cleaned
 
 # =========================================================
 # [관리자용] 게시판 관리 기능
@@ -127,10 +159,13 @@ async def admin_write_post_page(board_id: str, request: Request, user=Depends(ge
 @router.post("/api/upload-image")
 async def upload_image(
     file: UploadFile = File(...),
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
+    request: Request = None
 ):
-    """에디터 이미지 업로드"""
-    if not user:
+    """에디터 이미지 업로드 (관리자 또는 회원)"""
+    # 관리자 또는 회원 확인
+    member = await get_current_member(request)
+    if not user and not member:
         raise HTTPException(status_code=401, detail="인증이 필요합니다.")
     
     # 이미지 파일만 허용
@@ -178,19 +213,10 @@ async def admin_create_post(
         return RedirectResponse(url="/")
     
     try:
-        # 게시글 저장
-        new_post = models.Post(
-            board_id=board_id,
-            title=title.strip(),
-            content=content,
-            author=ADMIN_EMAIL,
-            created_at=datetime.now()
-        )
-        db.add(new_post)
-        db.flush()  # post.id를 얻기 위해 flush
-        
-        # 파일 저장
+        # 파일 저장 (게시글 저장 전에 먼저 처리)
         uploaded_files = []
+        final_content = content  # 최종 content
+        
         if files:
             # uploads/files 디렉토리 생성
             upload_dir = "uploads/files"
@@ -219,17 +245,33 @@ async def admin_create_post(
                             "type": file.content_type or "application/octet-stream"
                         }
                         uploaded_files.append(file_info)
+                        print(f"[DEBUG] 파일 저장 성공: {file.filename} -> {file_path}")
                     except Exception as e:
-                        print(f"파일 저장 실패: {file.filename}, 오류: {e}")
+                        print(f"[ERROR] 파일 저장 실패: {file.filename}, 오류: {e}")
                         continue
             
             # 첨부 파일 정보를 content에 HTML 주석으로 추가
             if uploaded_files:
                 import json
-                files_html = f'<!-- ATTACHED_FILES:{json.dumps(uploaded_files, ensure_ascii=False)} -->'
-                content = content + files_html
+                files_json = json.dumps(uploaded_files, ensure_ascii=False)
+                files_html = f'<!-- ATTACHED_FILES:{files_json} -->'
+                final_content = content + files_html
+                print(f"[DEBUG] 첨부파일 정보 추가: {len(uploaded_files)}개 파일")
+                print(f"[DEBUG] 첨부파일 JSON: {files_json[:200]}...")  # 처음 200자만 출력
+        
+        # 게시글 저장 (파일 정보가 포함된 content로 저장)
+        new_post = models.Post(
+            board_id=board_id,
+            title=title.strip(),
+            content=final_content,  # 파일 정보가 포함된 content 사용
+            author=ADMIN_EMAIL,
+            created_at=datetime.now()
+        )
+        db.add(new_post)
+        db.flush()  # post.id를 얻기 위해 flush
         
         db.commit()
+        print(f"[DEBUG] 게시글 저장 완료: post_id={new_post.id}, 첨부파일={len(uploaded_files)}개")
         return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
     except Exception as e:
         db.rollback()
@@ -240,13 +282,181 @@ async def admin_create_post(
 async def admin_post_view(board_id: str, post_id: int, request: Request, user=Depends(get_current_user), db: Session = Depends(get_db)):
     if not user: return RedirectResponse(url="/")
     post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    # 첨부파일 정보 파싱 및 content 정리
+    original_content = post.content or ""
+    all_attachments = parse_attached_files(original_content)
+    cleaned_content = clean_content(original_content)
+    post.content = cleaned_content
+    
+    # 이미지 파일 제외하고 일반 파일만 필터링
+    non_image_attachments = [
+        file for file in all_attachments 
+        if not file.get('type') or not file.get('type', '').startswith('image/')
+    ]
+    
+    # 디버깅용 로그
+    print(f"[DEBUG] admin_post_view - post_id: {post_id}")
+    print(f"[DEBUG] all_attachments count: {len(all_attachments) if all_attachments else 0}")
+    print(f"[DEBUG] non_image_attachments count: {len(non_image_attachments)}")
+    if all_attachments:
+        print(f"[DEBUG] all_attachments: {all_attachments}")
+    if non_image_attachments:
+        print(f"[DEBUG] non_image_attachments: {non_image_attachments}")
+    
     return templates.TemplateResponse("admin_post_view.html", {
         "request": request, 
         "board": {"id": board_id}, 
-        "post": post, 
+        "post": post,
+        "attachments": non_image_attachments,  # 이미지 제외한 일반 파일만 전달
         "admin_email": ADMIN_EMAIL, 
         "active_page": "board"
     })
+
+
+@router.get("/admin/board/{board_id}/post/{post_id}/edit", response_class=HTMLResponse)
+async def admin_post_edit_page(
+    board_id: str, 
+    post_id: int, 
+    request: Request, 
+    user=Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """게시글 수정 페이지"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    # content에서 첨부파일 주석 제거 (에디터에는 정리된 content만 표시)
+    cleaned_content = clean_content(post.content or "")
+    # Post 객체의 content를 정리된 버전으로 교체 (템플릿에서 사용)
+    post.content = cleaned_content
+    
+    return templates.TemplateResponse("admin_post_edit.html", {
+        "request": request,
+        "board": board,
+        "post": post,
+        "admin_email": ADMIN_EMAIL,
+        "active_page": "board"
+    })
+
+
+@router.post("/admin/board/{board_id}/post/{post_id}/edit")
+async def admin_post_edit(
+    board_id: str,
+    post_id: int,
+    title: str = Form(...),
+    content: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 수정 처리"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        # 기존 첨부파일 정보 가져오기
+        original_content = post.content or ""
+        existing_attachments = parse_attached_files(original_content)
+        
+        # 새로 업로드된 파일 처리
+        uploaded_files = []
+        final_content = content
+        
+        if files:
+            upload_dir = "uploads/files"
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            for file in files:
+                if file and file.filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ")
+                    safe_filename = f"{timestamp}_{safe_name}"
+                    file_path = os.path.join(upload_dir, safe_filename)
+                    
+                    try:
+                        with open(file_path, "wb") as f:
+                            content_data = await file.read()
+                            f.write(content_data)
+                        
+                        file_info = {
+                            "filename": file.filename,
+                            "path": f"/uploads/files/{safe_filename}",
+                            "size": len(content_data),
+                            "type": file.content_type or "application/octet-stream"
+                        }
+                        uploaded_files.append(file_info)
+                        print(f"[DEBUG] 새 파일 저장 성공: {file.filename}")
+                    except Exception as e:
+                        print(f"[ERROR] 파일 저장 실패: {file.filename}, 오류: {e}")
+                        continue
+        
+        # 기존 첨부파일과 새 첨부파일 합치기
+        all_attachments = existing_attachments + uploaded_files
+        
+        # 첨부파일 정보를 content에 추가
+        if all_attachments:
+            import json
+            files_json = json.dumps(all_attachments, ensure_ascii=False)
+            files_html = f'<!-- ATTACHED_FILES:{files_json} -->'
+            final_content = content + files_html
+            print(f"[DEBUG] 수정된 첨부파일 정보 추가: {len(all_attachments)}개 파일")
+        
+        # 게시글 업데이트
+        post.title = title.strip()
+        post.content = final_content
+        post.updated_at = datetime.now()
+        
+        db.commit()
+        print(f"[DEBUG] 게시글 수정 완료: post_id={post_id}")
+        return RedirectResponse(url=f"/admin/board/{board_id}/post/{post_id}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        print(f"[ERROR] 게시글 수정 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"게시글 수정 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/admin/board/{board_id}/post/{post_id}/delete")
+async def admin_post_delete(
+    board_id: str,
+    post_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 삭제"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        # 첨부파일 삭제 (선택사항 - 필요시 구현)
+        # 현재는 DB에서만 삭제하고 실제 파일은 유지
+        
+        db.delete(post)
+        db.commit()
+        print(f"[DEBUG] 게시글 삭제 완료: post_id={post_id}")
+        return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
+    except Exception as e:
+        db.rollback()
+        print(f"[ERROR] 게시글 삭제 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"게시글 삭제 중 오류가 발생했습니다: {str(e)}")
 
 
 # =========================================================
@@ -264,7 +474,8 @@ async def board_list_page(request: Request, db: Session = Depends(get_db)):
 async def board_detail_page(
     board_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
 ):
     """
     게시판 상세 화면 (목록)
@@ -285,30 +496,36 @@ async def board_detail_page(
     posts_with_attachments = []
     for post in posts:
         attachments = parse_attached_files(post.content or "")
+        cleaned_content = clean_content(post.content or "")
         posts_with_attachments.append({
             "post": post,
-            "attachments": attachments
+            "attachments": attachments,
+            "cleaned_content": cleaned_content
         })
     
     return templates.TemplateResponse("board_detail.html", {
         "request": request,
         "board": board,
         "posts_with_attachments": posts_with_attachments,
+        "is_admin": user is not None,
+        "admin_email": ADMIN_EMAIL if user else None,
     })
 
 
 @router.post("/board/write")
 async def public_create_post(
     board_id: str = Form(...),
-    writer: str = Form(...),          # 작성자 이름
     content: str = Form(...),         # 내용
-    password: str = Form(None),       # 비밀번호 (선택)
     title: str = Form(None),          # 제목 (방명록은 없을 수 있음)
+    user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    사용자 글쓰기 처리 (일반글 & 방명록 공통)
+    방명록 작성 처리 (관리자 전용)
     """
+    if not user:
+        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
+    
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
@@ -322,19 +539,19 @@ async def public_create_post(
         else:
             final_title = "무제"
 
-    # DB 저장
+    # DB 저장 (관리자 이메일을 author로 사용)
     new_post = models.Post(
         board_id=board_id,
         title=final_title,
         content=content,
-        author=writer,
-        created_at=datetime.now() # 현재 시간 저장
+        author=ADMIN_EMAIL,
+        created_at=datetime.now()
     )
     
     db.add(new_post)
     db.commit()
     
-    # 작성 후 다시 해당 게시판 페이지로 이동 (방명록은 리스트로, 일반형도 리스트로)
+    # 작성 후 다시 해당 게시판 페이지로 이동
     return RedirectResponse(url=f"/board/{board_id}", status_code=303)
 
 
@@ -368,8 +585,12 @@ async def public_post_view_page(
     post.views = (post.views or 0) + 1
     db.commit()
     
-    # 4. 첨부파일 정보 파싱
+    # 4. 첨부파일 정보 파싱 및 content 정리
     attachments = parse_attached_files(post.content or "")
+    # content에서 HTML 주석 제거 (첨부파일 정보 주석)
+    cleaned_content = clean_content(post.content or "")
+    # Post 객체의 content를 정리된 버전으로 교체 (템플릿에서 사용)
+    post.content = cleaned_content
     
     # 5. 템플릿에 board와 post 모두 전달
     return templates.TemplateResponse("post_view.html", {
@@ -378,3 +599,93 @@ async def public_post_view_page(
         "post": post,
         "attachments": attachments
     })
+
+
+# 방명록 수정 페이지
+@router.get("/board/{board_id}/post/{post_id}/edit", response_class=HTMLResponse)
+async def public_post_edit_page(
+    board_id: str,
+    post_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """방명록 수정 페이지 (관리자 전용)"""
+    if not user:
+        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
+    
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    cleaned_content = clean_content(post.content or "")
+    
+    return templates.TemplateResponse("guestbook_edit.html", {
+        "request": request,
+        "board": board,
+        "post": post,
+        "cleaned_content": cleaned_content,
+        "admin_email": ADMIN_EMAIL,
+    })
+
+
+# 방명록 수정 처리
+@router.post("/board/{board_id}/post/{post_id}/edit")
+async def public_post_edit(
+    board_id: str,
+    post_id: int,
+    content: str = Form(...),
+    user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """방명록 수정 처리 (관리자 전용)"""
+    if not user:
+        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
+    
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="게시판을 찾을 수 없습니다.")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        # 게시글 업데이트
+        post.content = content
+        post.updated_at = datetime.now()
+        
+        db.commit()
+        return RedirectResponse(url=f"/board/{board_id}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"게시글 수정 중 오류가 발생했습니다: {str(e)}")
+
+
+# 방명록 삭제
+@router.get("/board/{board_id}/post/{post_id}/delete")
+async def public_post_delete(
+    board_id: str,
+    post_id: int,
+    user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """방명록 삭제 (관리자 전용)"""
+    if not user:
+        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
+    
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    
+    try:
+        db.delete(post)
+        db.commit()
+        return RedirectResponse(url=f"/board/{board_id}", status_code=303)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"게시글 삭제 중 오류가 발생했습니다: {str(e)}")

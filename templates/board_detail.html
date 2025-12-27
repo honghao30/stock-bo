@@ -1,5 +1,6 @@
 {% extends "base.html" %} {% block title %}{{ board.name }}{% endblock %} {%
 block extra_styles %}
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 <style>
   .board-container {
     max-width: 800px;
@@ -58,6 +59,38 @@ block extra_styles %}
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
+  }
+
+  /* Quill 에디터 스타일 */
+  #guestbook-editor {
+    min-height: 200px;
+    background: white;
+    margin-bottom: 10px;
+  }
+
+
+  /* 수정/삭제 버튼 */
+  .post-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+  .btn-edit, .btn-delete {
+    padding: 5px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-edit {
+    background: #3498db;
+    color: white;
+  }
+  .btn-delete {
+    background: #e74c3c;
+    color: white;
   }
 
   /* 목록 스타일 */
@@ -186,32 +219,13 @@ block extra_styles %}
     {% endif %}
   </div>
 
-  {% if board.type in ['guestbook', 'guest'] %}
+  {% if board.type in ['guestbook', 'guest'] and is_admin %}
   <div class="guest-form-box">
     <h4 style="margin-top: 0; margin-bottom: 10px">✍️ 방명록 남기기</h4>
-    <form action="/board/write" method="post">
+    <form id="guestbookForm" action="/board/write" method="post">
       <input type="hidden" name="board_id" value="{{ board.id }}" />
-      <div class="form-row">
-        <input
-          type="text"
-          name="writer"
-          class="form-input"
-          placeholder="이름"
-          required
-        />
-        <input
-          type="password"
-          name="password"
-          class="form-input"
-          placeholder="비밀번호"
-        />
-      </div>
-      <textarea
-        name="content"
-        class="form-textarea"
-        placeholder="내용을 입력하세요..."
-        required
-      ></textarea>
+      <input type="hidden" id="content" name="content" />
+      <div id="guestbook-editor"></div>
       <button type="submit" class="submit-btn">등록하기</button>
     </form>
   </div>
@@ -224,13 +238,20 @@ block extra_styles %}
     <div class="post-item">
       {% if board.type in ['guestbook', 'guest'] %}
       <div class="meta">
-        <span class="author">👤 {{ post.author or '익명' }}</span>
+        {% set author_display = post.author.split('@')[0] if '@' in (post.author or '') else (post.author or '익명') %}
+        <span class="author">👤 {{ author_display }}</span>
         <span
           >{{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else
           '' }}</span
         >
+        {% if is_admin %}
+        <div class="post-actions">
+          <button class="btn-edit" onclick="editPost({{ post.id }}, '{{ board.id }}')">수정</button>
+          <button class="btn-delete" onclick="deletePost({{ post.id }}, '{{ board.id }}')">삭제</button>
+        </div>
+        {% endif %}
       </div>
-      <div class="guest-content">{{ post.content | safe }}</div>
+      <div class="guest-content">{{ item.cleaned_content | safe if item.cleaned_content else (post.content | safe) }}</div>
 
       {% else %}
       <div class="meta">
@@ -277,25 +298,87 @@ block extra_styles %}
   </div>
 </div>
 
+{% if board.type in ['guestbook', 'guest'] %}
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 <script>
-  // content에서 첨부 파일 주석 제거
-  document.addEventListener('DOMContentLoaded', function() {
-    const contentDivs = document.querySelectorAll('.guest-content');
-    contentDivs.forEach(div => {
-      let currentContent = div.innerHTML;
-      // 주석 제거 (모든 패턴)
-      currentContent = currentContent.replace(/<!--\s*ATTACHED_FILES:[\s\S]*?-->/g, '');
-      currentContent = currentContent.replace(/&lt;!--\s*ATTACHED_FILES:[\s\S]*?--&gt;/g, '');
-      div.innerHTML = currentContent;
-    });
+  // Quill 에디터 초기화
+  const quill = new Quill('#guestbook-editor', {
+    theme: 'snow',
+    modules: {
+      toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['link', 'image'],
+        ['clean']
+      ]
+    }
   });
-  
-  function formatFileSize(bytes) {
-    if (!bytes || bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+
+  // 이미지 업로드 핸들러
+  quill.getModule('toolbar').addHandler('image', function() {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
+    
+    input.onchange = async function() {
+      const file = input.files[0];
+      if (!file) return;
+      
+      if (file.size > 5 * 1024 * 1024) {
+        alert('이미지 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch('/api/upload-image', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error('이미지 업로드 실패');
+        }
+        
+        const data = await response.json();
+        const range = quill.getSelection(true);
+        quill.insertEmbed(range.index, 'image', data.url);
+        quill.setSelection(range.index + 1);
+      } catch (error) {
+        alert('이미지 업로드 중 오류가 발생했습니다.');
+        console.error(error);
+      }
+    };
+  });
+
+  // 폼 제출 처리
+  document.getElementById('guestbookForm').addEventListener('submit', function(e) {
+    const content = quill.root.innerHTML;
+    if (content === '<p><br></p>' || content.trim() === '') {
+      e.preventDefault();
+      alert('내용을 입력해주세요.');
+      return false;
+    }
+    
+    document.getElementById('content').value = content;
+  });
+
+  // 수정 기능
+  function editPost(postId, boardId) {
+    window.location.href = `/board/${boardId}/post/${postId}/edit`;
+  }
+
+  // 삭제 기능
+  function deletePost(postId, boardId) {
+    if (confirm('이 글을 삭제하시겠습니까?')) {
+      window.location.href = `/board/${boardId}/post/${postId}/delete`;
+    }
   }
 </script>
+{% endif %}
+
 {% endblock %}

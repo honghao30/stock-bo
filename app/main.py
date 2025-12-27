@@ -2,6 +2,7 @@
 FastAPI 애플리케이션 메인 파일
 """
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import os
@@ -12,10 +13,23 @@ from app import utils
 from app.config import ADMIN_EMAIL, ADMIN_PW
 
 # 라우터 import
-from app.routers import auth, dashboard, admin, members, board, schedule, finance
+from app.routers import auth, dashboard, admin, members, board, schedule, finance, api
 
 # FastAPI 앱 생성
-app = FastAPI()
+app = FastAPI(
+    title="Stock BO API",
+    description="게시판 및 일정 관리 REST API",
+    version="1.0.0"
+)
+
+# CORS 설정 (프론트엔드에서 API 호출 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 프로덕션에서는 특정 도메인으로 제한
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 정적 파일 서빙 (uploads 디렉토리)
 if os.path.exists("uploads"):
@@ -66,3 +80,4 @@ app.include_router(members.router)
 app.include_router(board.router)
 app.include_router(schedule.router)
 app.include_router(finance.router)
+app.include_router(api.router)  # REST API

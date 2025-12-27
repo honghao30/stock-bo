@@ -22,7 +22,104 @@
       {% endif %}
       {% block content %}{% endblock %}
     </div>
+    
+    <!-- 공통 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">처리 중...</div>
+    </div>
+    
     {% block extra_scripts %}{% endblock %}
+    
+    <!-- 공통 폼 제출 로딩 스크립트 -->
+    <script>
+      // 로딩 오버레이 표시 함수
+      function showLoading(text = '처리 중...') {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+          const loadingText = loadingOverlay.querySelector('.loading-text');
+          if (loadingText) {
+            loadingText.textContent = text;
+          }
+          loadingOverlay.classList.add('active');
+        }
+      }
+
+      // 로딩 오버레이 숨기기 함수
+      function hideLoading() {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+          loadingOverlay.classList.remove('active');
+        }
+      }
+
+      // 모든 폼에 로딩 화면 적용
+      document.addEventListener('DOMContentLoaded', function() {
+        const forms = document.querySelectorAll('form[method="post"]');
+        
+        forms.forEach(form => {
+          form.addEventListener('submit', function(e) {
+            // 폼 유효성 검사 통과 후에만 로딩 표시
+            if (form.checkValidity()) {
+              // 폼에 submitting 클래스 추가 (버튼 비활성화)
+              form.classList.add('submitting');
+              
+              // 로딩 텍스트 설정 (폼의 submit 버튼 텍스트 기반)
+              const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+              let loadingText = '처리 중...';
+              
+              if (submitBtn) {
+                const btnText = submitBtn.textContent || submitBtn.value || '';
+                // 버튼 텍스트에서 액션 추출
+                if (btnText.includes('생성')) loadingText = '게시판 생성 중...';
+                else if (btnText.includes('수정')) loadingText = '수정 중...';
+                else if (btnText.includes('작성')) loadingText = '작성 중...';
+                else if (btnText.includes('추가')) loadingText = '추가 중...';
+                else if (btnText.includes('등록')) loadingText = '등록 중...';
+                else if (btnText.includes('동기화')) loadingText = '동기화 중...';
+                else loadingText = '처리 중...';
+              }
+              
+              showLoading(loadingText);
+            }
+          });
+        });
+
+        // 삭제 링크에도 로딩 적용
+        const deleteLinks = document.querySelectorAll('a[href*="/delete"]');
+        deleteLinks.forEach(link => {
+          const originalOnclick = link.getAttribute('onclick');
+          const originalHref = link.getAttribute('href');
+          
+          // onclick을 재정의하여 confirm 후 로딩 표시
+          link.setAttribute('onclick', '');
+          link.addEventListener('click', function(e) {
+            // confirm이 있는 경우
+            if (originalOnclick && originalOnclick.includes('confirm')) {
+              // confirm 실행
+              const confirmMessage = originalOnclick.match(/confirm\(['"](.*?)['"]\)/);
+              if (confirmMessage) {
+                const confirmed = confirm(confirmMessage[1]);
+                if (confirmed) {
+                  // 확인을 누른 경우에만 로딩 표시 및 이동
+                  showLoading('삭제 중...');
+                  window.location.href = originalHref;
+                  e.preventDefault();
+                  return false;
+                } else {
+                  // 취소를 누른 경우
+                  e.preventDefault();
+                  return false;
+                }
+              }
+            } else {
+              // confirm이 없는 경우 바로 로딩 표시
+              showLoading('삭제 중...');
+            }
+          });
+        });
+      });
+    </script>
   </body>
 </html>
 

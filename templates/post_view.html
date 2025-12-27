@@ -118,17 +118,4 @@ endblock %} {% block content %}
   }
 </style>
 
-<script>
-  // content에서 첨부 파일 주석 제거
-  document.addEventListener('DOMContentLoaded', function() {
-    const contentDiv = document.getElementById('post-content');
-    if (contentDiv) {
-      let currentContent = contentDiv.innerHTML;
-      // 주석 제거 (모든 패턴)
-      currentContent = currentContent.replace(/<!--\s*ATTACHED_FILES:[\s\S]*?-->/g, '');
-      currentContent = currentContent.replace(/&lt;!--\s*ATTACHED_FILES:[\s\S]*?--&gt;/g, '');
-      contentDiv.innerHTML = currentContent;
-    }
-  });
-</script>
 {% endblock %}

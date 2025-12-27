@@ -1,11 +1,15 @@
 """
 게시판 관리 라우터
 """
-from fastapi import APIRouter, Form, Request, Depends, HTTPException
+import os
+import json
+import re
+from fastapi import APIRouter, Form, Request, Depends, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import List, Optional
 
 from app.dependencies import get_current_user
 from app.config import ADMIN_EMAIL
@@ -14,6 +18,41 @@ from app import models
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+
+def format_file_size(bytes: int) -> str:
+    """파일 크기를 읽기 쉬운 형식으로 변환"""
+    if not bytes or bytes == 0:
+        return '0 Bytes'
+    k = 1024
+    sizes = ['Bytes', 'KB', 'MB', 'GB']
+    i = int(bytes.bit_length() / 10) if bytes > 0 else 0
+    i = min(i, len(sizes) - 1)
+    return f"{round(bytes / (k ** i) * 100) / 100} {sizes[i]}"
+
+
+def parse_attached_files(content: str) -> List[dict]:
+    """content에서 첨부파일 정보를 파싱하여 반환"""
+    if not content:
+        return []
+    
+    files = []
+    # HTML 주석에서 첨부 파일 정보 추출
+    pattern = r'<!--\s*ATTACHED_FILES:\s*(\[[\s\S]*?\])\s*-->'
+    match = re.search(pattern, content)
+    
+    if match:
+        try:
+            files = json.loads(match.group(1))
+            # 파일 크기 포맷팅 추가
+            for file in files:
+                if 'size' in file and file['size']:
+                    file['formatted_size'] = format_file_size(file['size'])
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"첨부파일 파싱 오류: {e}")
+            return []
+    
+    return files if isinstance(files, list) else []
 
 # =========================================================
 # [관리자용] 게시판 관리 기능
@@ -78,20 +117,136 @@ async def admin_board_posts_page(board_id: str, request: Request, user=Depends(g
 async def admin_write_post_page(board_id: str, request: Request, user=Depends(get_current_user), db: Session = Depends(get_db)):
     if not user: return RedirectResponse(url="/")
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
-    return templates.TemplateResponse("admin_post_write.html", {"request": request, "board": board})
+    return templates.TemplateResponse("admin_post_write.html", {
+        "request": request, 
+        "board": board, 
+        "admin_email": ADMIN_EMAIL, 
+        "active_page": "board"
+    })
+
+@router.post("/api/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user)
+):
+    """에디터 이미지 업로드"""
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
+    
+    # 이미지 파일만 허용
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다.")
+    
+    # 파일 크기 체크 (5MB)
+    file_content = await file.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다.")
+    
+    try:
+        # uploads/images 디렉토리 생성
+        upload_dir = "uploads/images"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # 파일명 생성
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ") if file.filename else "image"
+        safe_filename = f"{timestamp}_{safe_name}"
+        file_path = os.path.join(upload_dir, safe_filename)
+        
+        # 파일 저장
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        # URL 반환
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"url": f"/uploads/images/{safe_filename}"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이미지 업로드 실패: {str(e)}")
+
 
 @router.post("/admin/board/{board_id}/write")
-async def admin_create_post(board_id: str, title: str = Form(...), content: str = Form(...), user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if not user: return RedirectResponse(url="/")
-    db.add(models.Post(board_id=board_id, title=title, content=content, author=ADMIN_EMAIL, created_at=datetime.now()))
-    db.commit()
-    return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
+async def admin_create_post(
+    board_id: str,
+    title: str = Form(...),
+    content: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """게시글 작성 (파일 첨부 포함)"""
+    if not user:
+        return RedirectResponse(url="/")
+    
+    try:
+        # 게시글 저장
+        new_post = models.Post(
+            board_id=board_id,
+            title=title.strip(),
+            content=content,
+            author=ADMIN_EMAIL,
+            created_at=datetime.now()
+        )
+        db.add(new_post)
+        db.flush()  # post.id를 얻기 위해 flush
+        
+        # 파일 저장
+        uploaded_files = []
+        if files:
+            # uploads/files 디렉토리 생성
+            upload_dir = "uploads/files"
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            for file in files:
+                if file and file.filename:
+                    # 파일명 중복 방지를 위해 타임스탬프 추가
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    # 파일명에서 특수문자 제거
+                    safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ")
+                    safe_filename = f"{timestamp}_{safe_name}"
+                    file_path = os.path.join(upload_dir, safe_filename)
+                    
+                    # 파일 저장
+                    try:
+                        with open(file_path, "wb") as f:
+                            content_data = await file.read()
+                            f.write(content_data)
+                        
+                        # 파일 정보 저장
+                        file_info = {
+                            "filename": file.filename,
+                            "path": f"/uploads/files/{safe_filename}",
+                            "size": len(content_data),
+                            "type": file.content_type or "application/octet-stream"
+                        }
+                        uploaded_files.append(file_info)
+                    except Exception as e:
+                        print(f"파일 저장 실패: {file.filename}, 오류: {e}")
+                        continue
+            
+            # 첨부 파일 정보를 content에 HTML 주석으로 추가
+            if uploaded_files:
+                import json
+                files_html = f'<!-- ATTACHED_FILES:{json.dumps(uploaded_files, ensure_ascii=False)} -->'
+                content = content + files_html
+        
+        db.commit()
+        return RedirectResponse(url=f"/admin/board/{board_id}/posts", status_code=303)
+    except Exception as e:
+        db.rollback()
+        print(f"게시글 작성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"게시글 작성 중 오류가 발생했습니다: {str(e)}")
 
 @router.get("/admin/board/{board_id}/post/{post_id}", response_class=HTMLResponse)
 async def admin_post_view(board_id: str, post_id: int, request: Request, user=Depends(get_current_user), db: Session = Depends(get_db)):
     if not user: return RedirectResponse(url="/")
     post = db.query(models.Post).filter(models.Post.id == post_id).first()
-    return templates.TemplateResponse("admin_post_view.html", {"request": request, "board": {"id": board_id}, "post": post})
+    return templates.TemplateResponse("admin_post_view.html", {
+        "request": request, 
+        "board": {"id": board_id}, 
+        "post": post, 
+        "admin_email": ADMIN_EMAIL, 
+        "active_page": "board"
+    })
 
 
 # =========================================================
@@ -126,10 +281,19 @@ async def board_detail_page(
         models.Post.board_id == board_id
     ).order_by(models.Post.created_at.desc()).all()
     
+    # 각 게시글의 첨부파일 정보 파싱
+    posts_with_attachments = []
+    for post in posts:
+        attachments = parse_attached_files(post.content or "")
+        posts_with_attachments.append({
+            "post": post,
+            "attachments": attachments
+        })
+    
     return templates.TemplateResponse("board_detail.html", {
         "request": request,
         "board": board,
-        "posts": posts,
+        "posts_with_attachments": posts_with_attachments,
     })
 
 
@@ -204,9 +368,13 @@ async def public_post_view_page(
     post.views = (post.views or 0) + 1
     db.commit()
     
-    # 4. 템플릿에 board와 post 모두 전달
+    # 4. 첨부파일 정보 파싱
+    attachments = parse_attached_files(post.content or "")
+    
+    # 5. 템플릿에 board와 post 모두 전달
     return templates.TemplateResponse("post_view.html", {
         "request": request, 
         "board": board, 
-        "post": post
+        "post": post,
+        "attachments": attachments
     })

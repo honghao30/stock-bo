@@ -12,6 +12,14 @@
     {% include "sidebar.html" %}
     {% endif %}
     <div class="main-content" {% if active_page is none %}style="margin-left: 0; width: 100%;"{% endif %}>
+      {% if active_page is not none and admin_email %}
+      <div class="header">
+        <span style="font-size: 18px"
+          >환영합니다, <b>{{ admin_email }}</b> 관리자님</span
+        >
+        <a href="/logout" class="logout-btn">로그아웃</a>
+      </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </div>
     {% block extra_scripts %}{% endblock %}

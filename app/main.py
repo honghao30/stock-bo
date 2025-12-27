@@ -3,6 +3,8 @@ FastAPI 애플리케이션 메인 파일
 """
 from fastapi import FastAPI
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+import os
 
 from app import models
 from app.database import engine, get_db
@@ -14,6 +16,10 @@ from app.routers import auth, dashboard, admin, members, board, schedule, financ
 
 # FastAPI 앱 생성
 app = FastAPI()
+
+# 정적 파일 서빙 (uploads 디렉토리)
+if os.path.exists("uploads"):
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # DB 초기화: 서버 시작 시 테이블 생성
 models.Base.metadata.create_all(bind=engine)

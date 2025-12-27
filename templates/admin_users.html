@@ -37,12 +37,6 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="header">
-  <span style="font-size: 18px"
-    >환영합니다, <b>{{ admin_email }}</b> 관리자님</span
-  >
-  <a href="/logout" class="logout-btn">로그아웃</a>
-</div>
 <div class="card">
   <h3>👥 신규 관리자 추가</h3>
   <form action="/admin/users/add" method="post" class="add-form">

@@ -10,6 +10,7 @@ from datetime import datetime, date
 from app.database import get_db
 from app import models
 from app.routers.board import parse_attached_files, clean_content
+from app.dependencies import get_current_user_from_token
 
 router = APIRouter()
 
@@ -34,7 +35,8 @@ def serialize_date(d: Optional[date]) -> Optional[str]:
 
 @router.get("/api/boards")
 async def get_boards(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     게시판 목록 조회
@@ -62,7 +64,8 @@ async def get_boards(
 @router.get("/api/boards/{board_id}")
 async def get_board(
     board_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     게시판 상세 조회
@@ -91,7 +94,8 @@ async def get_board_posts(
     board_id: str,
     page: int = Query(1, ge=1, description="페이지 번호"),
     limit: int = Query(10, ge=1, le=100, description="페이지당 항목 수"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     게시판의 게시글 목록 조회 (페이지네이션 지원)
@@ -144,7 +148,8 @@ async def get_board_posts(
 @router.get("/api/posts/{post_id}")
 async def get_post(
     post_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     게시글 상세 조회
@@ -195,7 +200,8 @@ async def get_schedules(
     start_date: Optional[str] = Query(None, description="시작 날짜 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료 날짜 (YYYY-MM-DD)"),
     type: Optional[str] = Query(None, description="일정 타입 (manual, api)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     일정 목록 조회 (날짜 범위 및 타입 필터링 지원)
@@ -244,7 +250,8 @@ async def get_schedules(
 @router.get("/api/schedules/{schedule_id}")
 async def get_schedule(
     schedule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_from_token)
 ):
     """
     일정 상세 조회

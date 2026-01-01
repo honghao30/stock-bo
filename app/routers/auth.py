@@ -1,9 +1,11 @@
 """
 인증 관련 라우터
 """
-from fastapi import APIRouter, Form, Request, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, Request, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from datetime import timedelta
 
 from app import models, utils
 from app.database import get_db
@@ -13,19 +15,25 @@ from app.config import ADMIN_EMAIL
 router = APIRouter()
 
 
+# API 토큰 발급용 요청 모델
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
 @router.get("/", response_class=HTMLResponse)
 async def read_root(user=Depends(get_current_user)):
-    """초기 접속 화면"""
+    """초기 접속 화면 - 로그인 시 대시보드로 리다이렉트"""
     if user:
         return RedirectResponse(url="/admin/dashboard")
-    return """
-    <div style="text-align:center; padding:100px; font-family:sans-serif;">
-        <h1 style="color:#e74c3c;">🛑 관리자 인증 필요</h1>
-        <p style="font-size:18px; color:#555;">허가되지 않은 접근입니다. 로그인 후 이용해주세요.</p>
-        <br>
-        <a href="/login" style="padding:15px 30px; background:#3498db; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">로그인 페이지로 이동</a>
-    </div>
-    """
+    # 로그인되지 않은 경우 로그인 페이지로 리다이렉트
+    return RedirectResponse(url="/login")
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -68,4 +76,57 @@ async def logout():
     response = RedirectResponse(url="/")
     response.delete_cookie(AUTH_COOKIE_NAME)
     return response
+
+
+# =========================================================
+# REST API용 토큰 발급 엔드포인트
+# =========================================================
+
+@router.post("/api/auth/login", response_model=TokenResponse)
+async def api_login(
+    token_request: TokenRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    API용 로그인 엔드포인트 (JWT 토큰 발급)
+    
+    사용 예시:
+    ```json
+    POST /api/auth/login
+    {
+        "username": "admin@example.com",
+        "password": "password123"
+    }
+    ```
+    
+    응답:
+    ```json
+    {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "token_type": "bearer",
+        "expires_in": 86400
+    }
+    ```
+    """
+    user = db.query(models.AdminUser).filter(models.AdminUser.email == token_request.username).first()
+    
+    if not user or not utils.verify_password(token_request.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="아이디 또는 비밀번호가 잘못되었습니다",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # JWT 토큰 생성
+    access_token_expires = timedelta(hours=24)
+    access_token = utils.create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": int(access_token_expires.total_seconds())
+    }
 

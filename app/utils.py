@@ -1,4 +1,8 @@
 from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+from typing import Optional
+from app.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_ACCESS_TOKEN_EXPIRE_HOURS
 
 # bcrypt 알고리즘 사용 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -10,3 +14,24 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     """비밀번호를 암호화하여 리턴"""
     return pwd_context.hash(password)
+
+# JWT 토큰 관련 함수
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """JWT 액세스 토큰 생성"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=JWT_ACCESS_TOKEN_EXPIRE_HOURS)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str) -> Optional[dict]:
+    """JWT 토큰 검증 및 페이로드 반환"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except JWTError:
+        return None

@@ -16,25 +16,72 @@ class FinanceApiService:
         self.service_key = "4614abeae6a355ee62d9d9ac6ff0799dae33fca08be8939ee0199563ac8e2f61"
         self.timeout = 30.0
     
-    async def fetch_disclosure_info(self, page_no: int = 1, num_of_rows: int = 10) -> Dict:
+    async def fetch_disclosure_info(self, page_no: int = 1, num_of_rows: int = 10, bas_dt: Optional[str] = None, auto_retry: bool = True) -> Dict:
         """
         금융위원회 공시정보를 가져옵니다. (명세서: GetDiscInfoService_V2)
         기본적으로 배당공시정보(getDiviDiscInfo_V2)를 호출하도록 설정했습니다.
+        
+        Args:
+            page_no: 페이지 번호 (기본값: 1)
+            num_of_rows: 페이지당 행 수 (기본값: 10)
+            bas_dt: 기준일자 (YYYYMMDD 형식, None이면 오늘 날짜 사용)
+            auto_retry: 데이터가 없을 경우 이전 날짜로 자동 재시도 (기본값: True, 최대 30일)
         """
         try:
             # 명세서 기준 정확한 경로: 서비스명/상세기능명
             url = f"{self.base_url}/GetDiscInfoService_V2/getDiviDiscInfo_V2"
-            params = {
-                "serviceKey": self.service_key,
-                "resultType": "json",
-                "pageNo": page_no,
-                "numOfRows": num_of_rows
-            }
+            
+            # 기준일자가 없으면 오늘 날짜를 YYYYMMDD 형식으로 설정
+            if bas_dt is None:
+                current_date = datetime.now()
+            else:
+                current_date = datetime.strptime(bas_dt, "%Y%m%d")
+            
+            # 최대 30일까지 시도 (오늘 포함)
+            max_retries = 30
             
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                return response.json() 
+                for day_offset in range(max_retries):
+                    # 현재 시도할 날짜 계산
+                    target_date = current_date - timedelta(days=day_offset)
+                    target_date_str = target_date.strftime("%Y%m%d")
+                    
+                    params = {
+                        "serviceKey": self.service_key,
+                        "resultType": "json",
+                        "pageNo": page_no,
+                        "numOfRows": num_of_rows,
+                        "basDt": target_date_str
+                    }
+                    
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    result = response.json()
+                    
+                    # 응답 구조 확인 및 totalCount 체크
+                    total_count = 0
+                    try:
+                        if "response" in result and "body" in result["response"]:
+                            total_count = result["response"]["body"].get("totalCount", 0)
+                    except (KeyError, TypeError) as e:
+                        print(f"응답 파싱 오류: {e}")
+                    
+                    # 데이터가 있으면 해당 결과 반환
+                    if total_count > 0:
+                        if day_offset > 0:
+                            print(f"✅ 배당공시정보: {target_date_str} 날짜의 데이터를 조회했습니다. (원래 요청: {current_date.strftime('%Y%m%d')})")
+                        else:
+                            print(f"✅ 배당공시정보: {target_date_str} 날짜의 데이터를 조회했습니다.")
+                        return result
+                    
+                    # auto_retry가 False이면 첫 번째 시도 결과 반환
+                    if not auto_retry:
+                        return result
+                
+                # 30일 내에 데이터를 찾지 못한 경우 마지막 결과 반환
+                print(f"⚠️ 배당공시정보: 최근 30일 내 데이터를 찾을 수 없습니다.")
+                return result
+                
         except httpx.HTTPError as e:
             print(f"공시정보 API 호출 실패: {e}")
             return {"error": str(e)}
@@ -42,49 +89,71 @@ class FinanceApiService:
             print(f"예상치 못한 오류: {e}")
             return {"error": str(e)}
     
-    async def fetch_capital_increase_info(self, page_no: int = 1, num_of_rows: int = 10) -> Dict:
-        """
-        금융위원회 공모주/유상증자 공시정보를 가져옵니다. (명세서: GetDiscInfoService_V2)
-        상세기능명: getCapiIncrWithConsDiscInfo_V2
-        """
-        try:
-            url = f"{self.base_url}/GetDiscInfoService_V2/getCapiIncrWithConsDiscInfo_V2"
-            params = {
-                "serviceKey": self.service_key,
-                "resultType": "json",
-                "pageNo": page_no,
-                "numOfRows": num_of_rows
-            }
-            
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                return response.json() 
-        except httpx.HTTPError as e:
-            print(f"공모주/유상증자 공시정보 API 호출 실패: {e}")
-            return {"error": str(e)}
-        except Exception as e:
-            print(f"예상치 못한 오류: {e}")
-            return {"error": str(e)}
-    
-    async def fetch_bonus_issuance_info(self, page_no: int = 1, num_of_rows: int = 10) -> Dict:
+    async def fetch_bonus_issuance_info(self, page_no: int = 1, num_of_rows: int = 10, bas_dt: Optional[str] = None, auto_retry: bool = True) -> Dict:
         """
         금융위원회 무상증자 공시정보를 가져옵니다. (명세서: GetDiscInfoService_V2)
         상세기능명: getBonuIssuDiscInfo_V2
+        
+        Args:
+            page_no: 페이지 번호 (기본값: 1)
+            num_of_rows: 페이지당 행 수 (기본값: 10)
+            bas_dt: 기준일자 (YYYYMMDD 형식, None이면 오늘 날짜 사용)
+            auto_retry: 데이터가 없을 경우 이전 날짜로 자동 재시도 (기본값: True, 최대 30일)
         """
         try:
             url = f"{self.base_url}/GetDiscInfoService_V2/getBonuIssuDiscInfo_V2"
-            params = {
-                "serviceKey": self.service_key,
-                "resultType": "json",
-                "pageNo": page_no,
-                "numOfRows": num_of_rows
-            }
+            
+            # 기준일자가 없으면 오늘 날짜를 YYYYMMDD 형식으로 설정
+            if bas_dt is None:
+                current_date = datetime.now()
+            else:
+                current_date = datetime.strptime(bas_dt, "%Y%m%d")
+            
+            # 최대 30일까지 시도 (오늘 포함)
+            max_retries = 30
             
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                return response.json() 
+                for day_offset in range(max_retries):
+                    # 현재 시도할 날짜 계산
+                    target_date = current_date - timedelta(days=day_offset)
+                    target_date_str = target_date.strftime("%Y%m%d")
+                    
+                    params = {
+                        "serviceKey": self.service_key,
+                        "resultType": "json",
+                        "pageNo": page_no,
+                        "numOfRows": num_of_rows,
+                        "basDt": target_date_str
+                    }
+                    
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    result = response.json()
+                    
+                    # 응답 구조 확인 및 totalCount 체크
+                    total_count = 0
+                    try:
+                        if "response" in result and "body" in result["response"]:
+                            total_count = result["response"]["body"].get("totalCount", 0)
+                    except (KeyError, TypeError) as e:
+                        print(f"응답 파싱 오류: {e}")
+                    
+                    # 데이터가 있으면 해당 결과 반환
+                    if total_count > 0:
+                        if day_offset > 0:
+                            print(f"✅ 무상증자 공시정보: {target_date_str} 날짜의 데이터를 조회했습니다. (원래 요청: {current_date.strftime('%Y%m%d')})")
+                        else:
+                            print(f"✅ 무상증자 공시정보: {target_date_str} 날짜의 데이터를 조회했습니다.")
+                        return result
+                    
+                    # auto_retry가 False이면 첫 번째 시도 결과 반환
+                    if not auto_retry:
+                        return result
+                
+                # 30일 내에 데이터를 찾지 못한 경우 마지막 결과 반환
+                print(f"⚠️ 무상증자 공시정보: 최근 30일 내 데이터를 찾을 수 없습니다.")
+                return result
+                
         except httpx.HTTPError as e:
             print(f"무상증자 공시정보 API 호출 실패: {e}")
             return {"error": str(e)}

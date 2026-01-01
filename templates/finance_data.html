@@ -1,18 +1,156 @@
 {% extends "base.html" %}
 
-{% block title %}금융위원회 데이터 확인 - BO System{% endblock %}
+{% block title %}금융 데이터 확인 - BO System{% endblock %}
 
 {% block extra_styles %}
 <style>
-  .data-section {
+  /* 최상위 카테고리 탭 스타일 - 큰 카드 형태 */
+  .category-tabs {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+    padding: 10px 0;
+  }
+
+  .category-tab {
+    flex: 1;
+    padding: 20px 30px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 700;
+    color: #495057;
+    transition: all 0.3s;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .category-tab:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #adb5bd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  .category-tab.active {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border-color: #2980b9;
+    color: white;
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .category-tab.active::before {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.3);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+
+  /* 카테고리 콘텐츠 */
+  .category-content {
+    display: none;
+  }
+
+  .category-content.active {
+    display: block;
+    animation: fadeIn 0.3s;
+  }
+
+  .tab-container {
+    margin-top: 20px;
+  }
+
+  /* 2단계 하위 탭 스타일 - 작은 탭 형태 */
+  .tab-buttons {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    background: white;
+    padding: 5px 5px 0 5px;
+    border-radius: 6px 6px 0 0;
+  }
+
+  .tab-button {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.2s;
+    margin-right: 3px;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+  }
+
+  .tab-button:hover {
+    background: #f1f3f5;
+    color: #495057;
+  }
+
+  .tab-button.active {
+    background: #f8f9fa;
+    color: #2c3e50;
+    border-bottom-color: #2c3e50;
+    font-weight: 600;
+  }
+
+  .tab-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #2c3e50;
+  }
+
+  .tab-content {
+    display: none;
+    animation: fadeIn 0.3s;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .tab-section {
     margin-bottom: 30px;
   }
 
-  .data-section h3 {
+  .tab-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+  }
+
+  .tab-section-header h3 {
     color: #2c3e50;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+    margin: 0;
+    flex: 1;
   }
 
   .btn-fetch {
@@ -22,272 +160,499 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    margin-right: 10px;
-    margin-bottom: 10px;
+    font-size: 14px;
+    transition: background 0.3s;
   }
 
   .btn-fetch:hover {
     background: #2980b9;
   }
 
-  .data-display {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 15px;
-    margin-top: 15px;
-    max-height: 500px;
-    overflow-y: auto;
+  .btn-fetch:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
   }
 
-  .data-display pre {
-    margin: 0;
+  .info-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
     font-size: 12px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    font-weight: 500;
+    margin-left: 10px;
+  }
+
+  .info-badge.waiting {
+    background: #e8f4fd;
+    color: #2980b9;
+  }
+
+  .info-badge.loading {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  .info-badge.success {
+    background: #d4edda;
+    color: #155724;
+  }
+
+  .info-badge.error {
+    background: #f8d7da;
+    color: #721c24;
+  }
+
+  .data-table-container {
+    margin-top: 20px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table thead {
+    background: #3498db;
+    color: white;
+  }
+
+  .data-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #2980b9;
+  }
+
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .data-table tbody tr:hover {
+    background: #f8f9fa;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
   }
 
   .loading {
+    padding: 40px;
+    text-align: center;
     color: #3498db;
     font-style: italic;
   }
 
   .error {
-    color: #e74c3c;
+    padding: 15px;
+    color: #721c24;
     background: #f8d7da;
-    padding: 10px;
     border-radius: 4px;
+    margin-top: 15px;
   }
 
-  .success {
+  .success-message {
+    padding: 12px;
     color: #155724;
     background: #d4edda;
-    padding: 10px;
     border-radius: 4px;
+    margin-bottom: 15px;
+    font-weight: 500;
+  }
+
+  .empty-message {
+    padding: 40px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+  }
+
+  .coming-soon {
+    padding: 60px 20px;
+    text-align: center;
+    color: #6c757d;
+  }
+
+  .coming-soon-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+  }
+
+  .coming-soon h3 {
+    color: #2c3e50;
     margin-bottom: 10px;
   }
 
-  .info-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    background: #e8f4fd;
-    color: #2980b9;
-    border-radius: 4px;
-    font-size: 12px;
-    margin-left: 10px;
+  /* 반응형 */
+  .data-table-container {
+    overflow-x: auto;
+  }
+
+  @media (max-width: 768px) {
+    .category-tabs {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .category-tab {
+      padding: 16px 20px;
+      font-size: 16px;
+    }
+
+    .tab-button {
+      padding: 8px 14px;
+      font-size: 12px;
+    }
+
+    .data-table {
+      font-size: 12px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 8px;
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="card">
-  <h2 style="color: #2c3e50; margin-top: 0">📊 금융위원회 공시정보 확인</h2>
+  <h2 style="color: #2c3e50; margin-top: 0">📊 금융 데이터 확인</h2>
   <p style="color: #666">
-    금융위원회 공개데이터포털에서 제공하는 3가지 공시정보를 확인할 수 있습니다.
+    금융위원회 및 한국거래소에서 제공하는 데이터를 확인할 수 있습니다.
   </p>
-  <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0" />
 
-  <!-- 배당공시정보 -->
-  <div class="data-section">
-    <h3>
-      💰 배당공시정보 (getDiviDiscInfo_V2)
-      <span class="info-badge" id="dividend-status">대기중</span>
-    </h3>
-    <button class="btn-fetch" onclick="fetchDividendInfo()">
-      배당공시정보 가져오기
+  <!-- 최상위 카테고리 탭 -->
+  <div class="category-tabs">
+    <button class="category-tab active" onclick="switchCategory('fsc')">
+      🏛️ 금융위원회
     </button>
-    <div id="dividend-data" class="data-display" style="display: none;"></div>
+    <button class="category-tab" onclick="switchCategory('krx')">
+      📈 한국거래소
+    </button>
   </div>
 
-  <!-- 공모주/유상증자 공시정보 -->
-  <div class="data-section">
-    <h3>
-      📈 공모주/유상증자 공시정보 (getCapiIncrWithConsDiscInfo_V2)
-      <span class="info-badge" id="capital-increase-status">대기중</span>
-    </h3>
-    <button class="btn-fetch" onclick="fetchCapitalIncreaseInfo()">
-      공모주/유상증자 정보 가져오기
-    </button>
-    <div id="capital-increase-data" class="data-display" style="display: none;"></div>
+  <!-- 금융위원회 카테고리 콘텐츠 -->
+  <div id="category-fsc" class="category-content active">
+    <div class="tab-container">
+      <!-- 하위 탭 버튼 -->
+      <div class="tab-buttons">
+        <button class="tab-button active" onclick="switchTab('fsc', 'bonus')">
+          🎁 무상증자
+        </button>
+        <button class="tab-button" onclick="switchTab('fsc', 'dividend')">
+          💰 배당공시정보
+        </button>
+        <button class="tab-button" onclick="switchTab('fsc', 'price')">
+          💹 주식시세정보
+        </button>
+      </div>
+
+      <!-- 무상증자 탭 -->
+      <div id="tab-fsc-bonus" class="tab-content active">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>무상증자 공시정보 (getBonuIssuDiscInfo_V2)</h3>
+          </div>
+          <div id="bonus-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+
+      <!-- 배당공시정보 탭 -->
+      <div id="tab-fsc-dividend" class="tab-content">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>배당공시정보 (getDiviDiscInfo_V2)</h3>
+          </div>
+          <div id="dividend-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+
+      <!-- 주식시세정보 탭 -->
+      <div id="tab-fsc-price" class="tab-content">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>주식시세정보 (getStockPriceInfo)</h3>
+          </div>
+          <div id="price-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+
+    </div>
   </div>
 
-  <!-- 무상증자 공시정보 -->
-  <div class="data-section">
-    <h3>
-      🎁 무상증자 공시정보 (getBonuIssuDiscInfo_V2)
-      <span class="info-badge" id="bonus-issuance-status">대기중</span>
-    </h3>
-    <button class="btn-fetch" onclick="fetchBonusIssuanceInfo()">
-      무상증자 정보 가져오기
-    </button>
-    <div id="bonus-issuance-data" class="data-display" style="display: none;"></div>
-  </div>
+  <!-- 한국거래소 카테고리 콘텐츠 -->
+  <div id="category-krx" class="category-content">
+    <div class="tab-container">
+      <!-- 하위 탭 버튼 -->
+      <div class="tab-buttons">
+        <button class="tab-button active" onclick="switchTab('krx', 'market')">
+          📊 시장 현황
+        </button>
+        <button class="tab-button" onclick="switchTab('krx', 'daily')">
+          📅 일일 거래량
+        </button>
+        <button class="tab-button" onclick="switchTab('krx', 'stock')">
+          💼 종목 정보
+        </button>
+      </div>
 
-  <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0" />
+      <!-- 시장 현황 탭 -->
+      <div id="tab-krx-market" class="tab-content active">
+        <div class="tab-section">
+          <div class="coming-soon">
+            <div class="coming-soon-icon">🚧</div>
+            <h3>준비 중입니다</h3>
+            <p>한국거래소 시장 현황 데이터는 곧 제공될 예정입니다.</p>
+          </div>
+        </div>
+      </div>
 
-  <!-- 주식시세정보 (참고용) -->
-  <div class="data-section">
-    <h3>
-      💹 주식시세정보 (참고용)
-      <span class="info-badge" id="price-status">대기중</span>
-    </h3>
-    <button class="btn-fetch" onclick="fetchStockPrice()">
-      주식시세 정보 가져오기
-    </button>
-    <div id="price-data" class="data-display" style="display: none;"></div>
-  </div>
+      <!-- 일일 거래량 탭 -->
+      <div id="tab-krx-daily" class="tab-content">
+        <div class="tab-section">
+          <div class="coming-soon">
+            <div class="coming-soon-icon">🚧</div>
+            <h3>준비 중입니다</h3>
+            <p>한국거래소 일일 거래량 데이터는 곧 제공될 예정입니다.</p>
+          </div>
+        </div>
+      </div>
 
-  <!-- 전체 공시정보 일괄 수집 -->
-  <div class="data-section">
-    <h3>🔄 전체 공시정보 일괄 수집</h3>
-    <button class="btn-fetch" onclick="fetchAllDisclosureData()" style="background: #27ae60;">
-      모든 공시정보 가져오기
-    </button>
-    <div id="all-disclosure-data" class="data-display" style="display: none;"></div>
+      <!-- 종목 정보 탭 -->
+      <div id="tab-krx-stock" class="tab-content">
+        <div class="tab-section">
+          <div class="coming-soon">
+            <div class="coming-soon-icon">🚧</div>
+            <h3>준비 중입니다</h3>
+            <p>한국거래소 종목 정보 데이터는 곧 제공될 예정입니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+  // 카테고리 전환 함수
+  function switchCategory(category) {
+    // 모든 카테고리 탭과 콘텐츠 비활성화
+    document.querySelectorAll('.category-tab').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.category-content').forEach(content => content.classList.remove('active'));
+
+    // 선택된 카테고리 활성화
+    document.querySelector(`button[onclick="switchCategory('${category}')"]`).classList.add('active');
+    document.getElementById(`category-${category}`).classList.add('active');
+
+    // 해당 카테고리의 첫 번째 탭 활성화
+    const firstTab = category === 'fsc' ? 'bonus' : 'market';
+    switchTab(category, firstTab);
+  }
+
+  // 탭 전환 함수 (카테고리 포함)
+  function switchTab(category, tabName) {
+    // 현재 카테고리의 모든 탭 버튼과 콘텐츠 비활성화
+    const categoryEl = document.getElementById(`category-${category}`);
+    categoryEl.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    categoryEl.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+    // 선택된 탭 활성화
+    const tabButton = categoryEl.querySelector(`button[onclick="switchTab('${category}', '${tabName}')"]`);
+    if (tabButton) {
+      tabButton.classList.add('active');
+    }
+    const tabContent = document.getElementById(`tab-${category}-${tabName}`);
+    if (tabContent) {
+      tabContent.classList.add('active');
+    }
+
+    // 금융위원회 카테고리인 경우 자동으로 데이터 로드
+    if (category === 'fsc') {
+      switch(tabName) {
+        case 'bonus':
+          fetchBonusIssuanceInfo();
+          break;
+        case 'dividend':
+          fetchDividendInfo();
+          break;
+        case 'price':
+          fetchStockPrice();
+          break;
+      }
+    }
+  }
+
+  // JSON 데이터를 테이블로 변환
+  function jsonToTable(data) {
+    try {
+      // API 응답 구조에 따라 items 추출
+      let items = [];
+      
+      if (data.response && data.response.body && data.response.body.items) {
+        const itemsObj = data.response.body.items;
+        if (itemsObj.item) {
+          items = Array.isArray(itemsObj.item) ? itemsObj.item : [itemsObj.item];
+        }
+      } else if (Array.isArray(data)) {
+        items = data;
+      } else if (data.items) {
+        items = Array.isArray(data.items) ? data.items : [data.items];
+      }
+
+      if (!items || items.length === 0) {
+        return '<div class="empty-message">데이터가 없습니다.</div>';
+      }
+
+      // 첫 번째 아이템에서 모든 키 추출
+      const allKeys = new Set();
+      items.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+          Object.keys(item).forEach(key => allKeys.add(key));
+        }
+      });
+
+      const columns = Array.from(allKeys);
+
+      // 테이블 생성
+      let html = '<table class="data-table"><thead><tr>';
+      
+      // 헤더
+      columns.forEach(key => {
+        html += `<th>${formatColumnName(key)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      // 데이터 행
+      items.forEach(item => {
+        html += '<tr>';
+        columns.forEach(key => {
+          const value = item[key] !== null && item[key] !== undefined ? item[key] : '-';
+          html += `<td>${escapeHtml(String(value))}</td>`;
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      return html;
+
+    } catch (error) {
+      return `<div class="error">데이터 파싱 오류: ${error.message}</div>`;
+    }
+  }
+
+  // 컬럼명 포맷팅 (한글 변환)
+  function formatColumnName(key) {
+    const columnMap = {
+      'basDt': '기준일자',
+      'crno': '법인등록번호',
+      'corpNm': '법인명',
+      'diviAmt': '배당금액',
+      'diviRcdb': '배당기준일',
+      'diviPymntDt': '배당지급일',
+      'stckIssuCmpyNm': '주식발행회사명',
+      'stckParPrc': '주식액면가',
+      'diviDcd': '배당구분코드',
+      'diviDcdNm': '배당구분명',
+      'isuExctDt': '발행실행일',
+      'pymntStaDt': '지급시작일',
+      'pymntEndDt': '지급종료일',
+      'capclAftDivAmt': '자본금액면가이후배당금액',
+      'stckParPrcAftDiv': '주식액면가배당이후',
+      'clscmpDiviAmt': '정기배당금액',
+      'stockCd': '종목코드',
+      'stockNm': '종목명',
+      'clpr': '종가',
+      'vs': '대비',
+      'fltRt': '등락률',
+      'mkp': '시가',
+      'hipr': '고가',
+      'lopr': ' low가',
+      'trqu': '거래량',
+      'trPrc': '거래대금',
+      'lstgStCnt': '상장주식수',
+      'mrktTotAmt': '시가총액'
+    };
+
+    return columnMap[key] || key;
+  }
+
+  // HTML 이스케이프
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   // 배당공시정보 조회
   async function fetchDividendInfo() {
-    const statusEl = document.getElementById('dividend-status');
     const dataEl = document.getElementById('dividend-data');
-    
-    statusEl.textContent = '로딩중...';
-    statusEl.style.background = '#fff3cd';
-    statusEl.style.color = '#856404';
-    dataEl.style.display = 'block';
     dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
 
     try {
       const response = await fetch('/api/disclosure-info?page_no=1&num_of_rows=10');
       const data = await response.json();
       
-      statusEl.textContent = '완료';
-      statusEl.style.background = '#d4edda';
-      statusEl.style.color = '#155724';
-      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+      if (response.ok) {
+        dataEl.innerHTML = jsonToTable(data);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
     } catch (error) {
-      statusEl.textContent = '오류';
-      statusEl.style.background = '#f8d7da';
-      statusEl.style.color = '#721c24';
-      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
-    }
-  }
-
-  // 공모주/유상증자 공시정보 조회
-  async function fetchCapitalIncreaseInfo() {
-    const statusEl = document.getElementById('capital-increase-status');
-    const dataEl = document.getElementById('capital-increase-data');
-    
-    statusEl.textContent = '로딩중...';
-    statusEl.style.background = '#fff3cd';
-    statusEl.style.color = '#856404';
-    dataEl.style.display = 'block';
-    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
-
-    try {
-      const response = await fetch('/api/capital-increase-info?page_no=1&num_of_rows=10');
-      const data = await response.json();
-      
-      statusEl.textContent = '완료';
-      statusEl.style.background = '#d4edda';
-      statusEl.style.color = '#155724';
-      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-    } catch (error) {
-      statusEl.textContent = '오류';
-      statusEl.style.background = '#f8d7da';
-      statusEl.style.color = '#721c24';
-      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
     }
   }
 
   // 무상증자 공시정보 조회
   async function fetchBonusIssuanceInfo() {
-    const statusEl = document.getElementById('bonus-issuance-status');
-    const dataEl = document.getElementById('bonus-issuance-data');
-    
-    statusEl.textContent = '로딩중...';
-    statusEl.style.background = '#fff3cd';
-    statusEl.style.color = '#856404';
-    dataEl.style.display = 'block';
+    const dataEl = document.getElementById('bonus-data');
     dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
 
     try {
       const response = await fetch('/api/bonus-issuance-info?page_no=1&num_of_rows=10');
       const data = await response.json();
       
-      statusEl.textContent = '완료';
-      statusEl.style.background = '#d4edda';
-      statusEl.style.color = '#155724';
-      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+      if (response.ok) {
+        dataEl.innerHTML = jsonToTable(data);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
     } catch (error) {
-      statusEl.textContent = '오류';
-      statusEl.style.background = '#f8d7da';
-      statusEl.style.color = '#721c24';
-      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
     }
   }
 
+  // 주식시세정보 조회
   async function fetchStockPrice() {
-    const statusEl = document.getElementById('price-status');
     const dataEl = document.getElementById('price-data');
-    
-    statusEl.textContent = '로딩중...';
-    statusEl.style.background = '#fff3cd';
-    statusEl.style.color = '#856404';
-    dataEl.style.display = 'block';
     dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
 
     try {
       const response = await fetch('/api/stock-price?page_no=1&num_of_rows=10');
       const data = await response.json();
       
-      statusEl.textContent = '완료';
-      statusEl.style.background = '#d4edda';
-      statusEl.style.color = '#155724';
-      dataEl.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+      if (response.ok) {
+        dataEl.innerHTML = jsonToTable(data);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
     } catch (error) {
-      statusEl.textContent = '오류';
-      statusEl.style.background = '#f8d7da';
-      statusEl.style.color = '#721c24';
-      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
     }
   }
 
-  // 전체 공시정보 일괄 수집
-  async function fetchAllDisclosureData() {
-    const dataEl = document.getElementById('all-disclosure-data');
-    dataEl.style.display = 'block';
-    dataEl.innerHTML = '<div class="loading">모든 공시정보를 가져오는 중...</div>';
-
-    try {
-      // 3가지 공시정보를 병렬로 가져오기
-      const [dividendRes, capitalRes, bonusRes] = await Promise.all([
-        fetch('/api/disclosure-info?page_no=1&num_of_rows=10'),
-        fetch('/api/capital-increase-info?page_no=1&num_of_rows=10'),
-        fetch('/api/bonus-issuance-info?page_no=1&num_of_rows=10')
-      ]);
-
-      const dividendData = await dividendRes.json();
-      const capitalData = await capitalRes.json();
-      const bonusData = await bonusRes.json();
-
-      const allData = {
-        dividend: dividendData,
-        capitalIncrease: capitalData,
-        bonusIssuance: bonusData,
-        fetched_at: new Date().toISOString()
-      };
-
-      dataEl.innerHTML = '<div class="success">✅ 모든 공시정보 수집 완료!</div><pre>' + 
-        JSON.stringify(allData, null, 2) + '</pre>';
-    } catch (error) {
-      dataEl.innerHTML = '<div class="error">오류 발생: ' + error.message + '</div>';
-    }
-  }
+  // 페이지 로드 시 초기 데이터 자동 로드
+  document.addEventListener('DOMContentLoaded', function() {
+    // 첫 번째 탭 (무상증자) 데이터 자동 로드
+    fetchBonusIssuanceInfo();
+  });
 </script>
 {% endblock %}
-

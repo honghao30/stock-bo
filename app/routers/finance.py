@@ -39,15 +39,6 @@ async def get_disclosure_info(request: Request, page_no: int = 1, num_of_rows: i
     return JSONResponse(data)
 
 
-@router.get("/api/capital-increase-info")
-async def get_capital_increase_info(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
-    """공모주/유상증자 공시정보 조회"""
-    if not user:
-        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
-    data = await finance_api_service.fetch_capital_increase_info(page_no, num_of_rows)
-    return JSONResponse(data)
-
-
 @router.get("/api/bonus-issuance-info")
 async def get_bonus_issuance_info(request: Request, page_no: int = 1, num_of_rows: int = 10, user=Depends(get_current_user)):
     """무상증자 공시정보 조회"""
@@ -83,6 +74,6 @@ async def finance_data_page(request: Request, user=Depends(get_current_user)):
     return templates.TemplateResponse("finance_data.html", {
         "request": request,
         "admin_email": ADMIN_EMAIL,
-        "active_page": "dashboard"
+        "active_page": "finance-data"
     })
 

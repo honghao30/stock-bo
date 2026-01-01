@@ -217,36 +217,49 @@ class FinanceApiService:
                     # 응답 구조 확인 및 totalCount 체크
                     total_count = 0
                     response_bas_dt = None
+                    all_response_dates = []
                     try:
                         if "response" in result and "body" in result["response"]:
                             total_count = result["response"]["body"].get("totalCount", 0)
-                            # 응답 데이터의 실제 basDt 확인
+                            # 응답 데이터의 실제 basDt 확인 (모든 항목 확인)
                             items = result["response"]["body"].get("items", {})
                             if isinstance(items, dict) and "item" in items:
                                 item_list = items["item"]
                                 if isinstance(item_list, list) and len(item_list) > 0:
-                                    response_bas_dt = item_list[0].get("basDt")
+                                    # 모든 항목의 날짜 수집
+                                    all_response_dates = [item.get("basDt") for item in item_list if item.get("basDt")]
+                                    if all_response_dates:
+                                        response_bas_dt = max(all_response_dates)  # 가장 최신 날짜
                                 elif isinstance(item_list, dict):
                                     response_bas_dt = item_list.get("basDt")
+                                    if response_bas_dt:
+                                        all_response_dates = [response_bas_dt]
                     except (KeyError, TypeError) as e:
                         print(f"응답 파싱 오류: {e}")
                     
-                    # 응답 날짜와 요청 날짜가 다른 경우 경고
+                    # 응답 날짜와 요청 날짜 확인
                     if response_bas_dt:
                         if response_bas_dt != target_date_str:
-                            print(f"⚠️ ⚠️ ⚠️ 경고: 요청한 날짜({target_date_str})와 응답 데이터의 날짜({response_bas_dt})가 다릅니다!")
-                            print(f"   API가 날짜 파라미터를 무시하고 있습니다. API 명세서를 확인하세요.")
+                            print(f"⚠️ 요청한 날짜({target_date_str})와 응답 데이터의 최신 날짜({response_bas_dt})가 다릅니다.")
+                            print(f"   응답 데이터의 날짜들: {sorted(set(all_response_dates), reverse=True)[:5] if all_response_dates else '없음'}")
+                            # 응답 날짜가 요청 날짜보다 오래된 경우에만 계속 시도
+                            # 응답 날짜가 요청 날짜보다 최신이거나 같으면 반환 (API가 자동으로 최신 데이터를 반환하는 경우)
+                            if response_bas_dt < target_date_str:
+                                print(f"   응답 날짜가 요청 날짜보다 오래되었습니다. 계속 시도합니다...")
+                                continue
+                            else:
+                                print(f"   응답 날짜가 요청 날짜보다 최신입니다. 해당 데이터를 반환합니다.")
                         else:
                             print(f"✅ 응답 날짜 확인: {response_bas_dt} (요청과 일치)")
                     else:
-                        print(f"⚠️ 응답 데이터에 basDt 필드가 없습니다.")
+                        print(f"⚠️ 응답 데이터에 basDt 필드가 없습니다. 데이터가 있으면 반환합니다.")
                     
                     # 데이터가 있으면 해당 결과 반환
                     if total_count > 0:
                         if day_offset > 0:
-                            print(f"✅ 주식시세정보: {target_date_str} 날짜의 데이터를 조회했습니다. (원래 요청: {current_date.strftime('%Y%m%d')})")
+                            print(f"✅ 주식시세정보: {response_bas_dt or target_date_str} 날짜의 데이터를 조회했습니다. (원래 요청: {current_date.strftime('%Y%m%d')})")
                         else:
-                            print(f"✅ 주식시세정보: {target_date_str} 날짜의 데이터를 조회했습니다.")
+                            print(f"✅ 주식시세정보: {response_bas_dt or target_date_str} 날짜의 데이터를 조회했습니다.")
                         return result
                     
                     # auto_retry가 False이면 첫 번째 시도 결과 반환

@@ -344,19 +344,19 @@
     <div class="tab-container">
       <!-- 하위 탭 버튼 -->
       <div class="tab-buttons">
-        <button class="tab-button active" onclick="switchTab('krx', 'market')">
+        <button class="tab-button active" onclick="switchTab('krx', 'daily')">
           📈 시장 현황
         </button>
-        <button class="tab-button" onclick="switchTab('krx', 'daily')">
+        <button class="tab-button" onclick="switchTab('krx', 'kospi')">
           💹 코스피
         </button>
-        <button class="tab-button" onclick="switchTab('krx', 'stock')">
+        <button class="tab-button" onclick="switchTab('krx', 'kosdaq')">
           🚀 코스닥
         </button>
       </div>
 
       <!-- 시장 현황 탭 -->
-      <div id="tab-krx-market" class="tab-content active">
+      <div id="tab-krx-daily" class="tab-content active">
         <div class="tab-section">
           <div class="tab-section-header">
             <h3>전체 시장 현황</h3>
@@ -366,7 +366,7 @@
       </div>
 
       <!-- 코스피 탭 -->
-      <div id="tab-krx-daily" class="tab-content">
+      <div id="tab-krx-kospi" class="tab-content">
         <div class="tab-section">
           <div class="tab-section-header">
             <h3>코스피 지수 정보</h3>
@@ -376,7 +376,7 @@
       </div>
 
       <!-- 코스닥 탭 -->
-      <div id="tab-krx-stock" class="tab-content">
+      <div id="tab-krx-kosdaq" class="tab-content">
         <div class="tab-section">
           <div class="tab-section-header">
             <h3>코스닥 지수 정보</h3>
@@ -692,17 +692,47 @@
       const response = await fetch('/api/krx-kospi');
       const data = await response.json();
       
+      console.log('코스피 API 응답:', data);
+      
       if (response.ok) {
         if (data.error) {
           throw new Error(data.error);
         }
+        
+        // 백엔드에서 리스트를 직접 반환하므로, 리스트인지 확인
+        let items = Array.isArray(data) ? data : [];
+        console.log('원본 items:', items);
+        console.log('원본 items 길이:', items.length);
+        
+        if (items.length > 0) {
+          console.log('첫 번째 항목:', items[0]);
+          console.log('첫 번째 항목의 IDX_CLSS:', items[0]?.IDX_CLSS);
+        }
+        
         // 코스피 지수만 필터링 (IDX_CLSS가 'KOSPI'인 것만)
-        const filteredData = filterByIndexClass(data, 'KOSPI');
-        dataEl.innerHTML = jsonToKospiTable(filteredData);
+        const filteredItems = items.filter(item => {
+          if (!item) return false;
+          const idxClass = item.IDX_CLSS;
+          console.log('필터링 체크 - IDX_CLSS:', idxClass, '매칭:', idxClass === 'KOSPI');
+          return idxClass === 'KOSPI';
+        });
+        console.log('필터링 후 데이터:', filteredItems);
+        console.log('필터링 후 데이터 길이:', filteredItems.length, '개 항목');
+        
+        if (filteredItems.length === 0 && items.length > 0) {
+          console.warn('⚠️ 필터링 결과가 비어있습니다. 원본 데이터의 IDX_CLSS 값들:', items.map(i => i?.IDX_CLSS));
+        }
+        
+        const tableHtml = jsonToKospiTable(filteredItems);
+        console.log('생성된 테이블 HTML:', tableHtml.substring(0, 200));
+        console.log('생성된 테이블 HTML 길이:', tableHtml.length);
+        
+        dataEl.innerHTML = tableHtml;
       } else {
         throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
       }
     } catch (error) {
+      console.error('코스피 지수 조회 오류:', error);
       dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
     }
   }
@@ -720,9 +750,14 @@
         if (data.error) {
           throw new Error(data.error);
         }
+        
+        // 백엔드에서 리스트를 직접 반환하므로, 리스트인지 확인
+        let items = Array.isArray(data) ? data : [];
+        
         // 코스닥 지수만 필터링 (IDX_CLSS가 'KOSDAQ'인 것만)
-        const filteredData = filterByIndexClass(data, 'KOSDAQ');
-        dataEl.innerHTML = jsonToKospiTable(filteredData);
+        const filteredItems = items.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
+        
+        dataEl.innerHTML = jsonToKospiTable(filteredItems);
       } else {
         throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
       }
@@ -770,24 +805,18 @@
       let kospiItems = [];
       let kosdaqItems = [];
       
-      // 코스피 데이터 추출 및 필터링
+      // 코스피 데이터 추출 및 필터링 (백엔드에서 리스트를 직접 반환)
       if (data.kospi) {
         const kospiData = data.kospi;
-        if (kospiData.OutBlock_1) {
-          const items = Array.isArray(kospiData.OutBlock_1) ? kospiData.OutBlock_1 : [kospiData.OutBlock_1];
-          kospiItems = items.filter(item => item && item.IDX_CLSS === 'KOSPI');
-        } else if (Array.isArray(kospiData)) {
+        if (Array.isArray(kospiData)) {
           kospiItems = kospiData.filter(item => item && item.IDX_CLSS === 'KOSPI');
         }
       }
       
-      // 코스닥 데이터 추출 및 필터링
+      // 코스닥 데이터 추출 및 필터링 (백엔드에서 리스트를 직접 반환)
       if (data.kosdaq) {
         const kosdaqData = data.kosdaq;
-        if (kosdaqData.OutBlock_1) {
-          const items = Array.isArray(kosdaqData.OutBlock_1) ? kosdaqData.OutBlock_1 : [kosdaqData.OutBlock_1];
-          kosdaqItems = items.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
-        } else if (Array.isArray(kosdaqData)) {
+        if (Array.isArray(kosdaqData)) {
           kosdaqItems = kosdaqData.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
         }
       }
@@ -822,6 +851,15 @@
 
   // 지수 테이블 생성 헬퍼 함수
   function createIndexTable(items) {
+    console.log('createIndexTable 호출, items:', items);
+    console.log('items 타입:', typeof items, '배열 여부:', Array.isArray(items));
+    console.log('items 길이:', items ? items.length : 0);
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      console.warn('createIndexTable: items가 비어있거나 배열이 아님');
+      return '<div class="empty-message">데이터가 없습니다.</div>';
+    }
+    
     const displayFields = [
       { key: 'BAS_DD', label: '기준일자' },
       { key: 'IDX_NM', label: '지수명' },
@@ -844,7 +882,15 @@
     const maxRows = 50;
     const displayItems = items.slice(0, maxRows);
     
-    displayItems.forEach(item => {
+    console.log('표시할 항목 수:', displayItems.length);
+    
+    displayItems.forEach((item, index) => {
+      console.log(`항목 ${index}:`, item);
+      if (!item || typeof item !== 'object') {
+        console.warn(`항목 ${index}가 유효하지 않음:`, item);
+        return;
+      }
+      
       html += '<tr>';
       displayFields.forEach(field => {
         let value = item[field.key];
@@ -877,33 +923,60 @@
       </div>`;
     }
     
+    console.log('생성된 HTML 길이:', html.length);
     return html;
   }
 
   // 코스피 지수 데이터를 테이블로 변환
   function jsonToKospiTable(data) {
     try {
+      console.log('jsonToKospiTable 입력 데이터:', data);
+      console.log('데이터 타입:', typeof data, '배열 여부:', Array.isArray(data));
+      
+      // data가 이미 리스트인 경우 바로 사용
       let items = [];
       
-      // KRX API 응답 구조에 따라 items 추출
-      if (data.OutBlock_1) {
-        items = Array.isArray(data.OutBlock_1) ? data.OutBlock_1 : [data.OutBlock_1];
-      } else if (Array.isArray(data)) {
+      if (Array.isArray(data)) {
         items = data;
-      } else if (data.items) {
-        items = Array.isArray(data.items) ? data.items : [data.items];
-      } else if (data.data) {
-        items = Array.isArray(data.data) ? data.data : [data.data];
+        console.log('리스트로 받음:', items.length, '개 항목');
+      } else if (data && typeof data === 'object') {
+        // 객체인 경우 내부에서 찾기
+        if (data.OutBlock_1) {
+          items = Array.isArray(data.OutBlock_1) ? data.OutBlock_1 : [data.OutBlock_1];
+          console.log('OutBlock_1에서 추출:', items.length, '개 항목');
+        } else if (data.items) {
+          items = Array.isArray(data.items) ? data.items : [data.items];
+          console.log('items에서 추출:', items.length, '개 항목');
+        } else if (data.data) {
+          items = Array.isArray(data.data) ? data.data : [data.data];
+          console.log('data에서 추출:', items.length, '개 항목');
+        } else {
+          // 객체 자체가 하나의 항목일 수도 있음
+          items = [data];
+          console.log('객체를 항목으로 사용');
+        }
+      } else {
+        console.warn('알 수 없는 데이터 구조:', data);
+        return '<div class="empty-message">데이터 구조를 인식할 수 없습니다.</div>';
       }
 
+      console.log('최종 items:', items);
+      console.log('items 길이:', items.length);
+      console.log('첫 번째 항목:', items[0]);
+      
       if (!items || items.length === 0) {
+        console.warn('items가 비어있음');
         return '<div class="empty-message">데이터가 없습니다.</div>';
       }
 
       // createIndexTable 함수 사용
-      return createIndexTable(items);
+      const result = createIndexTable(items);
+      console.log('생성된 HTML 길이:', result.length);
+      return result;
 
     } catch (error) {
+      console.error('jsonToKospiTable 오류:', error);
+      console.error('스택:', error.stack);
       return `<div class="error">데이터 파싱 오류: ${error.message}</div>`;
     }
   }

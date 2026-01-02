@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.dependencies import get_current_user
 from app.config import ADMIN_EMAIL
-from app.services.api_service import finance_api_service
+from app.services.api_service import finance_api_service, krx_api_service
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -64,6 +64,40 @@ async def get_stock_price(request: Request, page_no: int = 1, num_of_rows: int =
         return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
     data = await finance_api_service.fetch_stock_price_info(page_no, num_of_rows, bas_dt)
     return JSONResponse(data)
+
+
+@router.get("/api/krx-kospi")
+async def get_krx_kospi(request: Request, bas_dd: str = None, user=Depends(get_current_user)):
+    """한국거래소 코스피 지수 조회"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    data = await krx_api_service.fetch_kospi_index(bas_dd)
+    return JSONResponse(data)
+
+
+@router.get("/api/krx-kosdaq")
+async def get_krx_kosdaq(request: Request, bas_dd: str = None, user=Depends(get_current_user)):
+    """한국거래소 코스닥 지수 조회"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    data = await krx_api_service.fetch_kosdaq_index(bas_dd)
+    return JSONResponse(data)
+
+
+@router.get("/api/krx-market")
+async def get_krx_market(request: Request, bas_dd: str = None, user=Depends(get_current_user)):
+    """한국거래소 전체 시장 지수 조회 (코스피 + 코스닥)"""
+    if not user:
+        return JSONResponse({"error": "인증이 필요합니다."}, status_code=401)
+    
+    # 코스피와 코스닥 데이터를 모두 가져옴
+    kospi_data = await krx_api_service.fetch_kospi_index(bas_dd)
+    kosdaq_data = await krx_api_service.fetch_kosdaq_index(bas_dd)
+    
+    return JSONResponse({
+        "kospi": kospi_data,
+        "kosdaq": kosdaq_data
+    })
 
 
 @router.get("/admin/finance-data", response_class=HTMLResponse)

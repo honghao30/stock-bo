@@ -331,16 +331,64 @@
 
   <!-- 최상위 카테고리 탭 -->
   <div class="category-tabs">
-    <button class="category-tab active" onclick="switchCategory('fsc')">
-      🏛️ 금융위원회
-    </button>
-    <button class="category-tab" onclick="switchCategory('krx')">
+    <button class="category-tab active" onclick="switchCategory('krx')">
       📈 한국거래소
+    </button>
+    <button class="category-tab" onclick="switchCategory('fsc')">
+      🏛️ 금융위원회
     </button>
   </div>
 
+  <!-- 한국거래소 카테고리 콘텐츠 -->
+  <div id="category-krx" class="category-content active">
+    <div class="tab-container">
+      <!-- 하위 탭 버튼 -->
+      <div class="tab-buttons">
+        <button class="tab-button active" onclick="switchTab('krx', 'market')">
+          📈 시장 현황
+        </button>
+        <button class="tab-button" onclick="switchTab('krx', 'daily')">
+          💹 코스피
+        </button>
+        <button class="tab-button" onclick="switchTab('krx', 'stock')">
+          🚀 코스닥
+        </button>
+      </div>
+
+      <!-- 시장 현황 탭 -->
+      <div id="tab-krx-market" class="tab-content active">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>전체 시장 현황</h3>
+          </div>
+          <div id="market-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+
+      <!-- 코스피 탭 -->
+      <div id="tab-krx-daily" class="tab-content">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>코스피 지수 정보</h3>
+          </div>
+          <div id="kospi-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+
+      <!-- 코스닥 탭 -->
+      <div id="tab-krx-stock" class="tab-content">
+        <div class="tab-section">
+          <div class="tab-section-header">
+            <h3>코스닥 지수 정보</h3>
+          </div>
+          <div id="kosdaq-data" class="data-table-container" style="display: block;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 금융위원회 카테고리 콘텐츠 -->
-  <div id="category-fsc" class="category-content active">
+  <div id="category-fsc" class="category-content">
     <div class="tab-container">
       <!-- 하위 탭 버튼 -->
       <div class="tab-buttons">
@@ -387,57 +435,6 @@
 
     </div>
   </div>
-
-  <!-- 한국거래소 카테고리 콘텐츠 -->
-  <div id="category-krx" class="category-content">
-    <div class="tab-container">
-      <!-- 하위 탭 버튼 -->
-      <div class="tab-buttons">
-        <button class="tab-button active" onclick="switchTab('krx', 'market')">
-          📊 시장 현황
-        </button>
-        <button class="tab-button" onclick="switchTab('krx', 'daily')">
-          📅 일일 거래량
-        </button>
-        <button class="tab-button" onclick="switchTab('krx', 'stock')">
-          💼 종목 정보
-        </button>
-      </div>
-
-      <!-- 시장 현황 탭 -->
-      <div id="tab-krx-market" class="tab-content active">
-        <div class="tab-section">
-          <div class="coming-soon">
-            <div class="coming-soon-icon">🚧</div>
-            <h3>준비 중입니다</h3>
-            <p>한국거래소 시장 현황 데이터는 곧 제공될 예정입니다.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 일일 거래량 탭 -->
-      <div id="tab-krx-daily" class="tab-content">
-        <div class="tab-section">
-          <div class="coming-soon">
-            <div class="coming-soon-icon">🚧</div>
-            <h3>준비 중입니다</h3>
-            <p>한국거래소 일일 거래량 데이터는 곧 제공될 예정입니다.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 종목 정보 탭 -->
-      <div id="tab-krx-stock" class="tab-content">
-        <div class="tab-section">
-          <div class="coming-soon">
-            <div class="coming-soon-icon">🚧</div>
-            <h3>준비 중입니다</h3>
-            <p>한국거래소 종목 정보 데이터는 곧 제공될 예정입니다.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}
 
@@ -454,7 +451,7 @@
     document.getElementById(`category-${category}`).classList.add('active');
 
     // 해당 카테고리의 첫 번째 탭 활성화
-    const firstTab = category === 'fsc' ? 'bonus' : 'market';
+    const firstTab = category === 'krx' ? 'market' : 'bonus';
     switchTab(category, firstTab);
   }
 
@@ -486,6 +483,21 @@
           break;
         case 'price':
           fetchStockPrice();
+          break;
+      }
+    }
+    
+    // 한국거래소 카테고리인 경우 자동으로 데이터 로드
+    if (category === 'krx') {
+      switch(tabName) {
+        case 'market':
+          fetchMarketOverview();
+          break;
+        case 'daily':
+          fetchKospiIndex();
+          break;
+        case 'stock':
+          fetchKosdaqIndex();
           break;
       }
     }
@@ -649,10 +661,270 @@
     }
   }
 
+  // 전체 시장 현황 조회
+  async function fetchMarketOverview() {
+    const dataEl = document.getElementById('market-data');
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/krx-market');
+      const data = await response.json();
+      
+      if (response.ok) {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        dataEl.innerHTML = jsonToMarketTable(data);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
+    } catch (error) {
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
+    }
+  }
+
+  // 코스피 지수 조회
+  async function fetchKospiIndex() {
+    const dataEl = document.getElementById('kospi-data');
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/krx-kospi');
+      const data = await response.json();
+      
+      if (response.ok) {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        // 코스피 지수만 필터링 (IDX_CLSS가 'KOSPI'인 것만)
+        const filteredData = filterByIndexClass(data, 'KOSPI');
+        dataEl.innerHTML = jsonToKospiTable(filteredData);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
+    } catch (error) {
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
+    }
+  }
+
+  // 코스닥 지수 조회
+  async function fetchKosdaqIndex() {
+    const dataEl = document.getElementById('kosdaq-data');
+    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+
+    try {
+      const response = await fetch('/api/krx-kosdaq');
+      const data = await response.json();
+      
+      if (response.ok) {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        // 코스닥 지수만 필터링 (IDX_CLSS가 'KOSDAQ'인 것만)
+        const filteredData = filterByIndexClass(data, 'KOSDAQ');
+        dataEl.innerHTML = jsonToKospiTable(filteredData);
+      } else {
+        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      }
+    } catch (error) {
+      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
+    }
+  }
+
+  // IDX_CLSS로 필터링하는 헬퍼 함수
+  function filterByIndexClass(data, indexClass) {
+    try {
+      let items = [];
+      
+      // 데이터 구조에 따라 items 추출
+      if (data.OutBlock_1) {
+        items = Array.isArray(data.OutBlock_1) ? data.OutBlock_1 : [data.OutBlock_1];
+      } else if (Array.isArray(data)) {
+        items = data;
+      } else if (data.items) {
+        items = Array.isArray(data.items) ? data.items : [data.items];
+      } else if (data.data) {
+        items = Array.isArray(data.data) ? data.data : [data.data];
+      }
+      
+      // IDX_CLSS로 필터링
+      const filteredItems = items.filter(item => item && item.IDX_CLSS === indexClass);
+      
+      // 원래 구조 유지
+      if (data.OutBlock_1) {
+        return { ...data, OutBlock_1: filteredItems };
+      } else if (Array.isArray(data)) {
+        return filteredItems;
+      } else {
+        return { ...data, items: filteredItems };
+      }
+    } catch (error) {
+      console.error('필터링 오류:', error);
+      return data;
+    }
+  }
+
+  // 전체 시장 현황 데이터를 테이블로 변환
+  function jsonToMarketTable(data) {
+    try {
+      let kospiItems = [];
+      let kosdaqItems = [];
+      
+      // 코스피 데이터 추출 및 필터링
+      if (data.kospi) {
+        const kospiData = data.kospi;
+        if (kospiData.OutBlock_1) {
+          const items = Array.isArray(kospiData.OutBlock_1) ? kospiData.OutBlock_1 : [kospiData.OutBlock_1];
+          kospiItems = items.filter(item => item && item.IDX_CLSS === 'KOSPI');
+        } else if (Array.isArray(kospiData)) {
+          kospiItems = kospiData.filter(item => item && item.IDX_CLSS === 'KOSPI');
+        }
+      }
+      
+      // 코스닥 데이터 추출 및 필터링
+      if (data.kosdaq) {
+        const kosdaqData = data.kosdaq;
+        if (kosdaqData.OutBlock_1) {
+          const items = Array.isArray(kosdaqData.OutBlock_1) ? kosdaqData.OutBlock_1 : [kosdaqData.OutBlock_1];
+          kosdaqItems = items.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
+        } else if (Array.isArray(kosdaqData)) {
+          kosdaqItems = kosdaqData.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
+        }
+      }
+
+      if (kospiItems.length === 0 && kosdaqItems.length === 0) {
+        return '<div class="empty-message">데이터가 없습니다.</div>';
+      }
+
+      let html = '<div style="display: flex; flex-direction: column; gap: 30px;">';
+      
+      // 코스피 섹션
+      if (kospiItems.length > 0) {
+        html += '<div><h4 style="color: #2c3e50; margin-bottom: 15px; font-size: 18px;">📈 코스피 지수</h4>';
+        html += createIndexTable(kospiItems);
+        html += '</div>';
+      }
+      
+      // 코스닥 섹션
+      if (kosdaqItems.length > 0) {
+        html += '<div><h4 style="color: #2c3e50; margin-bottom: 15px; font-size: 18px;">💼 코스닥 지수</h4>';
+        html += createIndexTable(kosdaqItems);
+        html += '</div>';
+      }
+      
+      html += '</div>';
+      return html;
+
+    } catch (error) {
+      return `<div class="error">데이터 파싱 오류: ${error.message}</div>`;
+    }
+  }
+
+  // 지수 테이블 생성 헬퍼 함수
+  function createIndexTable(items) {
+    const displayFields = [
+      { key: 'BAS_DD', label: '기준일자' },
+      { key: 'IDX_NM', label: '지수명' },
+      { key: 'CLSPRC_IDX', label: '종가' },
+      { key: 'CMPPREVDD_IDX', label: '대비' },
+      { key: 'FLUC_RT', label: '등락률(%)' },
+      { key: 'OPNPRC_IDX', label: '시가' },
+      { key: 'HGPRC_IDX', label: '고가' },
+      { key: 'LWPRC_IDX', label: '저가' },
+      { key: 'ACC_TRDVOL', label: '거래량' },
+      { key: 'ACC_TRDVAL', label: '거래대금' }
+    ];
+
+    let html = '<table class="data-table"><thead><tr>';
+    displayFields.forEach(field => {
+      html += `<th>${field.label}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    const maxRows = 50;
+    const displayItems = items.slice(0, maxRows);
+    
+    displayItems.forEach(item => {
+      html += '<tr>';
+      displayFields.forEach(field => {
+        let value = item[field.key];
+        if (value === null || value === undefined || value === '') {
+          value = '-';
+        } else {
+          if (['CLSPRC_IDX', 'CMPPREVDD_IDX', 'OPNPRC_IDX', 'HGPRC_IDX', 'LWPRC_IDX', 'ACC_TRDVOL', 'ACC_TRDVAL', 'MKTCAP'].includes(field.key)) {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+              value = numValue.toLocaleString('ko-KR');
+            }
+          }
+          if (field.key === 'FLUC_RT') {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+              value = numValue.toFixed(2) + '%';
+            }
+          }
+        }
+        html += `<td>${escapeHtml(String(value))}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    
+    if (items.length > maxRows) {
+      html += `<div class="info-message" style="margin-top: 10px; color: #666;">
+        총 ${items.length}개의 데이터 중 ${maxRows}개만 표시됩니다.
+      </div>`;
+    }
+    
+    return html;
+  }
+
+  // 코스피 지수 데이터를 테이블로 변환
+  function jsonToKospiTable(data) {
+    try {
+      let items = [];
+      
+      // KRX API 응답 구조에 따라 items 추출
+      if (data.OutBlock_1) {
+        items = Array.isArray(data.OutBlock_1) ? data.OutBlock_1 : [data.OutBlock_1];
+      } else if (Array.isArray(data)) {
+        items = data;
+      } else if (data.items) {
+        items = Array.isArray(data.items) ? data.items : [data.items];
+      } else if (data.data) {
+        items = Array.isArray(data.data) ? data.data : [data.data];
+      }
+
+      if (!items || items.length === 0) {
+        return '<div class="empty-message">데이터가 없습니다.</div>';
+      }
+
+      // createIndexTable 함수 사용
+      return createIndexTable(items);
+
+    } catch (error) {
+      return `<div class="error">데이터 파싱 오류: ${error.message}</div>`;
+    }
+  }
+
   // 페이지 로드 시 초기 데이터 자동 로드
   document.addEventListener('DOMContentLoaded', function() {
-    // 첫 번째 탭 (무상증자) 데이터 자동 로드
-    fetchBonusIssuanceInfo();
+    // 기본 활성화된 탭에 따라 데이터 로드
+    const activeCategory = document.querySelector('.category-tab.active');
+    if (activeCategory) {
+      const onclickAttr = activeCategory.getAttribute('onclick');
+      if (onclickAttr && onclickAttr.includes('krx')) {
+        // 한국거래소가 기본 활성화된 경우 - 시장 현황 로드
+        fetchMarketOverview();
+      } else {
+        // 금융위원회가 기본 활성화된 경우
+        fetchBonusIssuanceInfo();
+      }
+    } else {
+      // 기본값: 무상증자 데이터 로드
+      fetchBonusIssuanceInfo();
+    }
   });
 </script>
 {% endblock %}

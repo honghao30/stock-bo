@@ -318,5 +318,133 @@ class FinanceApiService:
         }
 
 
+class KrxApiService:
+    """한국거래소(KRX) API 호출 서비스"""
+    
+    def __init__(self):
+        self.base_url = "https://data-dbg.krx.co.kr/svc/apis"
+        self.api_key = "73346D637E1B47AA8B653668D4D969288CEAB195"
+        self.timeout = 30.0
+    
+    async def fetch_kospi_index(self, bas_dd: Optional[str] = None) -> Dict:
+        """
+        한국거래소 코스피 지수 데이터를 가져옵니다.
+        
+        Args:
+            bas_dd: 기준일자 (YYYYMMDD 형식, None이면 오늘 날짜 사용)
+        
+        Returns:
+            Dict: 코스피 지수 데이터
+        """
+        try:
+            url = f"{self.base_url}/idx/krx_dd_trd"
+            
+            # 기준일자가 없으면 오늘 날짜를 YYYYMMDD 형식으로 설정
+            if bas_dd is None:
+                current_date = datetime.now()
+                bas_dd = current_date.strftime("%Y%m%d")
+            
+            # KRX API 표준 방식: 쿼리 파라미터로 AUTH_KEY 전달
+            params = {
+                "AUTH_KEY": self.api_key,
+                "basDd": bas_dd
+            }
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                print(f"🔍 코스피 지수 데이터 조회 시도: {bas_dd}")
+                print(f"   URL: {url}")
+                print(f"   파라미터: basDd={bas_dd}")
+                
+                response = await client.get(url, headers=headers, params=params)
+                
+                print(f"   응답 상태: {response.status_code}")
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                print(f"✅ 코스피 지수 데이터 조회 성공: {bas_dd}")
+                print(f"   응답 구조: {list(result.keys()) if isinstance(result, dict) else '배열'}")
+                
+                return result
+                
+        except httpx.HTTPStatusError as e:
+            print(f"❌ 코스피 지수 API 호출 실패: {e.response.status_code}")
+            if e.response.status_code == 401:
+                print(f"   인증 오류: API 키가 유효하지 않거나 승인되지 않았습니다.")
+            print(f"   응답 본문: {e.response.text[:500]}")
+            return {"error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+        except httpx.HTTPError as e:
+            print(f"❌ 코스피 지수 API 호출 실패: {e}")
+            return {"error": str(e)}
+        except Exception as e:
+            print(f"❌ 예상치 못한 오류: {e}")
+            return {"error": str(e)}
+    
+    async def fetch_kosdaq_index(self, bas_dd: Optional[str] = None) -> Dict:
+        """
+        한국거래소 코스닥 지수 데이터를 가져옵니다.
+        
+        Args:
+            bas_dd: 기준일자 (YYYYMMDD 형식, None이면 오늘 날짜 사용)
+        
+        Returns:
+            Dict: 코스닥 지수 데이터
+        """
+        try:
+            url = f"{self.base_url}/idx/krx_dd_trd"
+            
+            # 기준일자가 없으면 오늘 날짜를 YYYYMMDD 형식으로 설정
+            if bas_dd is None:
+                current_date = datetime.now()
+                bas_dd = current_date.strftime("%Y%m%d")
+            
+            # KRX API 표준 방식: 쿼리 파라미터로 AUTH_KEY 전달
+            params = {
+                "AUTH_KEY": self.api_key,
+                "basDd": bas_dd
+            }
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                print(f"🔍 코스닥 지수 데이터 조회 시도: {bas_dd}")
+                print(f"   URL: {url}")
+                print(f"   파라미터: basDd={bas_dd}")
+                
+                response = await client.get(url, headers=headers, params=params)
+                
+                print(f"   응답 상태: {response.status_code}")
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                print(f"✅ 지수 데이터 조회 성공: {bas_dd}")
+                print(f"   응답 구조: {list(result.keys()) if isinstance(result, dict) else '배열'}")
+                
+                return result
+                
+        except httpx.HTTPStatusError as e:
+            print(f"❌ 코스닥 지수 API 호출 실패: {e.response.status_code}")
+            if e.response.status_code == 401:
+                print(f"   인증 오류: API 키가 유효하지 않거나 승인되지 않았습니다.")
+            print(f"   응답 본문: {e.response.text[:500]}")
+            return {"error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+        except httpx.HTTPError as e:
+            print(f"❌ 코스닥 지수 API 호출 실패: {e}")
+            return {"error": str(e)}
+        except Exception as e:
+            print(f"❌ 예상치 못한 오류: {e}")
+            return {"error": str(e)}
+
+
 # 싱글톤 인스턴스 생성
 finance_api_service = FinanceApiService()
+krx_api_service = KrxApiService()

@@ -451,7 +451,7 @@
     document.getElementById(`category-${category}`).classList.add('active');
 
     // 해당 카테고리의 첫 번째 탭 활성화
-    const firstTab = category === 'krx' ? 'market' : 'bonus';
+    const firstTab = category === 'krx' ? 'daily' : 'bonus';
     switchTab(category, firstTab);
   }
 
@@ -490,13 +490,13 @@
     // 한국거래소 카테고리인 경우 자동으로 데이터 로드
     if (category === 'krx') {
       switch(tabName) {
-        case 'market':
+        case 'daily':
           fetchMarketOverview();
           break;
-        case 'daily':
+        case 'kospi':
           fetchKospiIndex();
           break;
-        case 'stock':
+        case 'kosdaq':
           fetchKosdaqIndex();
           break;
       }
@@ -562,40 +562,23 @@
   }
 
   // 컬럼명 포맷팅 (한글 변환)
+  // 1. 컬럼명 포맷팅 함수에 KRX 대문자 필드 추가
   function formatColumnName(key) {
-    const columnMap = {
-      'basDt': '기준일자',
-      'crno': '법인등록번호',
-      'corpNm': '법인명',
-      'diviAmt': '배당금액',
-      'diviRcdb': '배당기준일',
-      'diviPymntDt': '배당지급일',
-      'stckIssuCmpyNm': '주식발행회사명',
-      'stckParPrc': '주식액면가',
-      'diviDcd': '배당구분코드',
-      'diviDcdNm': '배당구분명',
-      'isuExctDt': '발행실행일',
-      'pymntStaDt': '지급시작일',
-      'pymntEndDt': '지급종료일',
-      'capclAftDivAmt': '자본금액면가이후배당금액',
-      'stckParPrcAftDiv': '주식액면가배당이후',
-      'clscmpDiviAmt': '정기배당금액',
-      'stockCd': '종목코드',
-      'stockNm': '종목명',
-      'clpr': '종가',
-      'vs': '대비',
-      'fltRt': '등락률',
-      'mkp': '시가',
-      'hipr': '고가',
-      'lopr': ' low가',
-      'trqu': '거래량',
-      'trPrc': '거래대금',
-      'lstgStCnt': '상장주식수',
-      'mrktTotAmt': '시가총액'
-    };
-
-    return columnMap[key] || key;
-  }
+  const columnMap = {
+    'BAS_DD': '기준일자',
+    'IDX_NM': '지수명',
+    'CLSPRC_IDX': '종가',
+    'CMPPREVDD_IDX': '대비',
+    'FLUC_RT': '등락률(%)',
+    'OPNPRC_IDX': '시가',
+    'HGPRC_IDX': '고가',
+    'LWPRC_IDX': '저가',
+    'ACC_TRDVOL': '거래량',
+    'ACC_TRDVAL': '거래대금',
+    'MKTCAP': '상장시가총액'
+  };
+  return columnMap[key] || key;
+}
 
   // HTML 이스케이프
   function escapeHtml(text) {
@@ -663,25 +646,35 @@
 
   // 전체 시장 현황 조회
   async function fetchMarketOverview() {
-    const dataEl = document.getElementById('market-data');
-    dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
+  const dataEl = document.getElementById('market-data');
+  if (!dataEl) return;
+  dataEl.innerHTML = '<div class="loading">데이터를 가져오는 중...</div>';
 
-    try {
-      const response = await fetch('/api/krx-market');
-      const data = await response.json();
+  try {
+    const response = await fetch('/api/krx-market');
+    const data = await response.json();
+    
+    if (response.ok) {
+      // 백엔드에서 {kospi: [], kosdaq: []} 형태로 오므로 처리
+      let html = '<div style="display: flex; flex-direction: column; gap: 30px;">';
       
-      if (response.ok) {
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        dataEl.innerHTML = jsonToMarketTable(data);
-      } else {
-        throw new Error(data.error || data.detail || '데이터를 가져오는데 실패했습니다.');
+      if (data.kospi && data.kospi.length > 0) {
+        html += '<div><h4>📈 코스피 지수</h4>' + createIndexTable(data.kospi) + '</div>';
       }
-    } catch (error) {
-      dataEl.innerHTML = `<div class="error">오류 발생: ${error.message}</div>`;
+      if (data.kosdaq && data.kosdaq.length > 0) {
+        html += '<div><h4>💼 코스닥 지수</h4>' + createIndexTable(data.kosdaq) + '</div>';
+      }
+      
+      if (html === '<div style="display: flex; flex-direction: column; gap: 30px;">') {
+        dataEl.innerHTML = '<div class="empty-message">조회된 시장 데이터가 없습니다.</div>';
+      } else {
+        dataEl.innerHTML = html + '</div>';
+      }
     }
+  } catch (error) {
+    dataEl.innerHTML = `<div class="error">오류: ${error.message}</div>`;
   }
+}
 
   // 코스피 지수 조회
   async function fetchKospiIndex() {
@@ -802,26 +795,50 @@
   // 전체 시장 현황 데이터를 테이블로 변환
   function jsonToMarketTable(data) {
     try {
+      console.log('jsonToMarketTable 입력 데이터:', data);
+      console.log('데이터 타입:', typeof data);
+      console.log('data.kospi:', data.kospi);
+      console.log('data.kosdaq:', data.kosdaq);
+      
       let kospiItems = [];
       let kosdaqItems = [];
       
       // 코스피 데이터 추출 및 필터링 (백엔드에서 리스트를 직접 반환)
       if (data.kospi) {
         const kospiData = data.kospi;
+        console.log('kospiData 타입:', typeof kospiData, '배열 여부:', Array.isArray(kospiData));
         if (Array.isArray(kospiData)) {
-          kospiItems = kospiData.filter(item => item && item.IDX_CLSS === 'KOSPI');
+          console.log('kospiData 길이:', kospiData.length);
+          kospiItems = kospiData.filter(item => {
+            if (!item) return false;
+            const idxClass = item.IDX_CLSS;
+            console.log('KOSPI 필터링 - IDX_CLSS:', idxClass, '매칭:', idxClass === 'KOSPI');
+            return idxClass === 'KOSPI';
+          });
+          console.log('필터링 후 kospiItems:', kospiItems.length, '개');
         }
       }
       
       // 코스닥 데이터 추출 및 필터링 (백엔드에서 리스트를 직접 반환)
       if (data.kosdaq) {
         const kosdaqData = data.kosdaq;
+        console.log('kosdaqData 타입:', typeof kosdaqData, '배열 여부:', Array.isArray(kosdaqData));
         if (Array.isArray(kosdaqData)) {
-          kosdaqItems = kosdaqData.filter(item => item && item.IDX_CLSS === 'KOSDAQ');
+          console.log('kosdaqData 길이:', kosdaqData.length);
+          kosdaqItems = kosdaqData.filter(item => {
+            if (!item) return false;
+            const idxClass = item.IDX_CLSS;
+            console.log('KOSDAQ 필터링 - IDX_CLSS:', idxClass, '매칭:', idxClass === 'KOSDAQ');
+            return idxClass === 'KOSDAQ';
+          });
+          console.log('필터링 후 kosdaqItems:', kosdaqItems.length, '개');
         }
       }
 
+      console.log('최종 kospiItems:', kospiItems.length, 'kosdaqItems:', kosdaqItems.length);
+
       if (kospiItems.length === 0 && kosdaqItems.length === 0) {
+        console.warn('⚠️ 모든 데이터가 비어있음');
         return '<div class="empty-message">데이터가 없습니다.</div>';
       }
 
@@ -845,6 +862,7 @@
       return html;
 
     } catch (error) {
+      console.error('jsonToMarketTable 오류:', error);
       return `<div class="error">데이터 파싱 오류: ${error.message}</div>`;
     }
   }

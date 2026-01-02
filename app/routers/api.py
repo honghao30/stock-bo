@@ -15,6 +15,28 @@ from app.dependencies import get_current_user_from_token
 router = APIRouter()
 
 
+@router.get("/api/krx-market")
+async def get_krx_market():
+    # 서비스가 이미 List를 반환하므로 dict로 감싸서 전달
+    kospi = await krx_api_service.fetch_kospi_index()
+    kosdaq = await krx_api_service.fetch_kosdaq_index()
+    return {
+        "success": True,
+        "kospi": kospi, 
+        "kosdaq": kosdaq
+    }
+
+@router.get("/api/krx-kospi")
+async def get_krx_kospi():
+    data = await krx_api_service.fetch_kospi_index()
+    return data  # 리스트 그대로 반환 (프론트 fetchKospiIndex 대응)
+
+@router.get("/api/krx-kosdaq")
+async def get_krx_kosdaq():
+    data = await krx_api_service.fetch_kosdaq_index()
+    return data
+
+
 def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:
     """datetime을 ISO 형식 문자열로 변환"""
     if dt is None:
